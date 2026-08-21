@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "metaso-search-neo": {
+      "command": "node",
+      "args": ["./mcp/server.mjs", "--stdio"],
+      "cwd": ".",
+      "env_vars": [
+        "METASO_API_KEY",
+        "METASO_BASE_URL",
+        "METASO_TIMEOUT_MS",
+        "METASO_MAX_UPLOAD_BYTES",
+        "METASO_STATE_DIR",
+        "METASO_ALLOW_PRIVATE_URLS",
+        "CODEX_HOME"
+      ],
+      "tool_timeout_sec": 900
+    }
+  }
+}

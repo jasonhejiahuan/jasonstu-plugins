@@ -1,0 +1,5 @@
+interface:
+  display_name: "MetaSo Deep Research"
+  short_description: "Plan, search, verify, and synthesize with MetaSo"
+  brand_color: "#6C5CE7"
+  default_prompt: "Use $metaso-search-neo to research this topic with traceable sources."

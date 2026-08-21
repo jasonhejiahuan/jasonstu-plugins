@@ -1,0 +1,17 @@
+.DS_Store
+**/.DS_Store
+node_modules/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+
+# Local plugin state and credentials must never be committed.
+.metaso-search-neo/
+state/
+secrets/
+*.pem
+*.key
+*.p12
+*.pfx
