@@ -10,6 +10,8 @@
         "METASO_TIMEOUT_MS",
         "METASO_MAX_UPLOAD_BYTES",
         "METASO_STATE_DIR",
+        "METASO_KEY_PROFILE_DIR",
+        "METASO_DISABLE_KEYCHAIN",
         "METASO_ALLOW_PRIVATE_URLS",
         "CODEX_HOME"
       ],

@@ -33,6 +33,7 @@ If the plugin-global **Research Frontier** profile is enabled, respect its highe
 - Do not claim that search rank or `score: high` independently proves truth.
 - If deep-research diagnostics show failed searches or Reader calls, disclose material gaps. Supplement with targeted search/read calls only when needed.
 - Check `diagnostics.citationValidation`; do not present a report as fully sourced when validation remains false.
+- Check `diagnostics.languageValidation` when present; disclose a remaining requested-language mismatch instead of silently presenting it as compliant.
 - Treat API `credits` as per-call cost and Open API `balance` as remaining balance; do not merge them.
 - Leave raw-content retrieval off unless full indexed text is useful; Research Frontier does not override this.
 

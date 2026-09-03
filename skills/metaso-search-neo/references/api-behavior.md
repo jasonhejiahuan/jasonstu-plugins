@@ -6,15 +6,19 @@ Read this reference when selecting advanced parameters, interpreting failures, o
 
 | Tool | MetaSo endpoint |
 |---|---|
+| `metaso_capabilities` | Plugin-local capability report; no MetaSo call |
+| `metaso_research_frontier` | Plugin-local settings; no MetaSo call |
+| `metaso_resource_catalog` | Plugin-local state only; no MetaSo call |
 | `metaso_search` | `POST /api/v1/search` |
 | `metaso_read_url` | `POST /api/v1/reader` |
 | `metaso_answer` | `POST /api/v1/chat/completions` |
 | `metaso_research` | `POST /api/open/search/v2` |
 | `metaso_deep_research` | Bounded orchestration over search, Reader, and answer |
-| `metaso_resource_catalog` | Plugin-local state only; no MetaSo call |
 | `metaso_topic_create` | `PUT /api/open/topic` |
 | `metaso_topic_upload` | `PUT /api/open/file/{dirRootId}` |
+| `metaso_topic_upload_directory` | Repeated bounded `PUT /api/open/file/{dirRootId}` calls |
 | `metaso_file_status` | `GET /api/open/file/{fileId}/progress` |
+| `metaso_wait_files_ready` | Bounded polling of `GET /api/open/file/{fileId}/progress` |
 | `metaso_file_delete` | `POST /api/open/file/trash` |
 | `metaso_topic_delete` | `POST /api/open/topic/trash` |
 | `metaso_topic_search` | `POST /api/open/search/v2` with `searchTopicId` |
@@ -25,6 +29,8 @@ Read this reference when selecting advanced parameters, interpreting failures, o
 Search scopes are `webpage`, `document`, `scholar`, `image`, `video`, and `podcast`. The plugin accepts `paper` only as an alias and converts it to `scholar` before calling MetaSo.
 
 Chat models are `fast`, `fast_thinking`, and `ds-r1`. Always pass an explicit model; MetaSo's omitted/invalid-model behavior is not reliable.
+
+All returned identifier fields are normalized to strings before JavaScript number parsing can lose precision. Always replay the returned `sessionId` string unchanged for native-research or topic-search follow-ups.
 
 ## Request invariants
 
@@ -56,6 +62,8 @@ Tool arguments are validated against the advertised JSON Schemas inside the MCP 
 
 The server aggregates MetaSo SSE because MCP stdio tool calls return one result. Chat streams can contain citations, content, highlights, final usage, and `[DONE]`. Open streams can contain `balance`, `query`, `set-reference`, `heartbeat`, `append-text`, `answer-link-num-highlights`, and `[DONE]`.
 
+The plugin returns compact event counts instead of the duplicate raw event list and deduplicates citations/highlights. For `fast_thinking` and `ds-r1`, a caller's non-stream request is streamed upstream and normalized back to a non-stream result; this prevents upstream reasoning traces from being exposed as answer text.
+
 ## Research Frontier
 
 `metaso_research_frontier` stores a plugin-global profile outside the immutable plugin package. Default state is disabled. When enabled, it raises only unspecified defaults:
@@ -82,3 +90,5 @@ Uploads likewise remain successful if optional readiness polling later fails. In
 The high-cost gate uses an estimated upper bound based on planner rounds, planned search calls, Reader calls, synthesis/critique, and a possible citation repair. A standard label does not bypass the gate when custom limits are large.
 
 After synthesis, every `[S#]` marker is checked against the returned source registry. Missing or unknown IDs trigger one repair pass. If validation still fails, the report is prefixed with a warning and `diagnostics.citationValidation.valid` remains false. Semantic support is additionally reviewed by the model in deep mode, but deterministic validation proves only citation-ID integrity.
+
+Native MetaSo `[[n]]` markers are resolved against that answer response's source array and converted to stable registry IDs. Unmapped native markers fail validation. The registry never exceeds `max_sources`, including sources introduced by synthesis or repair. English, Simplified Chinese, Japanese, and Korean receive deterministic script-ratio checks and locale-specific fallback queries. Other languages use neutral fallback queries and are explicitly reported as unchecked rather than being overclaimed as validated.

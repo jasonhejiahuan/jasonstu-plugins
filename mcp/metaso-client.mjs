@@ -1,9 +1,10 @@
 import { randomBytes } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { basename, extname, join, resolve } from "node:path";
+import { loadMetaSoCredentialFromKeychain } from "./metaso-keychain.mjs";
 
 const DEFAULT_BASE_URL = "https://metaso.cn";
-const DEFAULT_TIMEOUT_MS = 60_000;
+const DEFAULT_TIMEOUT_MS = 120_000;
 const DEFAULT_MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const SEARCH_SCOPES = new Set([
   "webpage",
@@ -185,13 +186,89 @@ function sleep(milliseconds) {
   return new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds));
 }
 
+function preserveIdentifierIntegers(text) {
+  return String(text).replace(
+    /("(?:id|[A-Za-z_$][A-Za-z0-9_$]*(?:Id|ID|_id))"\s*:\s*)(-?\d+)(?=\s*[,}\]])/g,
+    (_match, prefix, digits) => `${prefix}${JSON.stringify(digits)}`,
+  );
+}
+
 function parseJsonMaybe(text) {
   if (!text) return null;
   try {
-    return JSON.parse(text);
+    return JSON.parse(preserveIdentifierIntegers(text));
   } catch {
     return null;
   }
+}
+
+function stripExposedReasoningTrace(text) {
+  const original = String(text ?? "");
+  const withoutTags = original.replace(
+    /^\s*<(?:think|analysis)>[\s\S]*?<\/(?:think|analysis)>\s*/i,
+    "",
+  );
+  const lines = withoutTags.split(/\r?\n/);
+  const firstContent = lines.findIndex((line) => line.trim());
+  if (firstContent === -1 || !lines[firstContent].trimStart().startsWith(">")) {
+    return { text: withoutTags, filtered: withoutTags !== original };
+  }
+
+  let boundary = firstContent;
+  const quoted = [];
+  while (boundary < lines.length) {
+    const trimmed = lines[boundary].trimStart();
+    if (trimmed && !trimmed.startsWith(">")) break;
+    quoted.push(lines[boundary]);
+    boundary += 1;
+  }
+  const trace = quoted.join("\n");
+  const looksLikeReasoning =
+    /(?:分析搜索结果|根据规则|检查约束|草拟回答|开始生成|思考结束|用户询问|输出语言|thinking process|let(?:'s| us) (?:analyze|reason)|we need to answer|analysis of (?:the )?search|draft answer|final check|instruction check)/i.test(
+      trace,
+    );
+  const remainder = lines.slice(boundary).join("\n").trim();
+  if (!looksLikeReasoning || !remainder) {
+    return { text: withoutTags, filtered: withoutTags !== original };
+  }
+  return { text: remainder, filtered: true };
+}
+
+function sanitizeAnswerResponse(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  let filtered = false;
+  const result = { ...value };
+  for (const field of ["reasoning", "reasoning_content", "thinking", "analysis"]) {
+    if (!Object.hasOwn(result, field)) continue;
+    delete result[field];
+    filtered = true;
+  }
+  for (const field of ["answer", "content"]) {
+    if (typeof result[field] !== "string") continue;
+    const sanitized = stripExposedReasoningTrace(result[field]);
+    result[field] = sanitized.text;
+    filtered ||= sanitized.filtered;
+  }
+  if (Array.isArray(result.choices)) {
+    result.choices = result.choices.map((choice) => {
+      if (!choice?.message || typeof choice.message !== "object") return choice;
+      const message = { ...choice.message };
+      for (const field of ["reasoning", "reasoning_content", "thinking", "analysis"]) {
+        if (!Object.hasOwn(message, field)) continue;
+        delete message[field];
+        filtered = true;
+      }
+      const content = message.content;
+      if (typeof content !== "string") return { ...choice, message };
+      const sanitized = stripExposedReasoningTrace(content);
+      filtered ||= sanitized.filtered;
+      return {
+        ...choice,
+        message: { ...message, content: sanitized.text },
+      };
+    });
+  }
+  return filtered ? { ...result, reasoningTraceFiltered: true } : result;
 }
 
 export function parseSseText(text) {
@@ -211,6 +288,24 @@ export function parseSseText(text) {
     events.push(parsed ?? { type: "raw", data });
   }
   return events;
+}
+
+function compactUnique(items, identity) {
+  const seen = new Set();
+  const result = [];
+  for (const item of items ?? []) {
+    const key = identity(item);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
+}
+
+function citationIdentity(item) {
+  return item && typeof item === "object"
+    ? item.link ?? item.url ?? item.id ?? `${item.title ?? ""}:${JSON.stringify(item)}`
+    : String(item);
 }
 
 function aggregateChatSse(events) {
@@ -236,6 +331,11 @@ function aggregateChatSse(events) {
       if (choice.finish_reason) result.finishReason = choice.finish_reason;
     }
   }
+  result.citations = compactUnique(result.citations, citationIdentity);
+  result.highlights = compactUnique(
+    result.highlights,
+    (item) => (typeof item === "string" ? item : JSON.stringify(item)),
+  );
   return result;
 }
 
@@ -247,10 +347,13 @@ function aggregateOpenSse(events) {
     sessionId: undefined,
     resultId: undefined,
     balance: undefined,
-    events,
+    eventCount: events.length,
+    eventTypes: {},
   };
   for (const event of events) {
     if (!event || typeof event !== "object") continue;
+    const eventType = typeof event.type === "string" ? event.type : "unknown";
+    result.eventTypes[eventType] = (result.eventTypes[eventType] ?? 0) + 1;
     if (event.sessionId) result.sessionId = event.sessionId;
     if (event.resultId) result.resultId = event.resultId;
     switch (event.type) {
@@ -274,6 +377,11 @@ function aggregateOpenSse(events) {
         break;
     }
   }
+  result.references = compactUnique(result.references, citationIdentity);
+  result.highlights = compactUnique(
+    result.highlights,
+    (item) => (typeof item === "string" ? item : JSON.stringify(item)),
+  );
   return result;
 }
 
@@ -318,15 +426,30 @@ function publicUrlAllowed(rawUrl) {
 
 export class MetasoClient {
   constructor(options = {}) {
-    this.apiKey = options.apiKey ?? process.env.METASO_API_KEY ?? "";
-    this.baseUrl = normalizeBaseUrl(options.baseUrl ?? process.env.METASO_BASE_URL ?? DEFAULT_BASE_URL);
+    const environment = options.environment ?? process.env;
+    if (Object.hasOwn(options, "apiKey")) {
+      this.apiKey = options.apiKey ?? "";
+      this.credentialSource = this.apiKey ? "explicit" : "none";
+    } else if (environment.METASO_API_KEY) {
+      this.apiKey = environment.METASO_API_KEY;
+      this.credentialSource = "environment";
+    } else {
+      const keychainLoader = options.keychainLoader ?? loadMetaSoCredentialFromKeychain;
+      const loadedCredential = keychainLoader({ environment });
+      this.apiKey =
+        typeof loadedCredential === "string" ? loadedCredential : loadedCredential?.key ?? "";
+      this.credentialProfile =
+        typeof loadedCredential === "object" ? loadedCredential?.profile ?? "" : "";
+      this.credentialSource = this.apiKey ? "macos_keychain" : "none";
+    }
+    this.baseUrl = normalizeBaseUrl(options.baseUrl ?? environment.METASO_BASE_URL ?? DEFAULT_BASE_URL);
     this.fetch = options.fetchImpl ?? globalThis.fetch;
-    this.timeoutMs = Number(options.timeoutMs ?? process.env.METASO_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
+    this.timeoutMs = Number(options.timeoutMs ?? environment.METASO_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
     this.maxUploadBytes = Number(
-      options.maxUploadBytes ?? process.env.METASO_MAX_UPLOAD_BYTES ?? DEFAULT_MAX_UPLOAD_BYTES,
+      options.maxUploadBytes ?? environment.METASO_MAX_UPLOAD_BYTES ?? DEFAULT_MAX_UPLOAD_BYTES,
     );
     this.allowPrivateUrls =
-      options.allowPrivateUrls ?? process.env.METASO_ALLOW_PRIVATE_URLS === "true";
+      options.allowPrivateUrls ?? environment.METASO_ALLOW_PRIVATE_URLS === "true";
     if (typeof this.fetch !== "function") throw new Error("A Fetch API implementation is required");
   }
 
@@ -335,6 +458,8 @@ export class MetasoClient {
       backend: "direct_rest",
       baseUrl: this.baseUrl,
       authenticated: Boolean(this.apiKey),
+      credentialSource: this.credentialSource,
+      ...(this.credentialProfile ? { credentialProfile: this.credentialProfile } : {}),
       searchScopes: [...SEARCH_SCOPES],
       chatModels: [...CHAT_MODELS],
       reader: true,
@@ -347,6 +472,7 @@ export class MetasoClient {
         searchSize: [1, 100],
         searchPage: [1, 10],
         maxUploadBytes: this.maxUploadBytes,
+        requestTimeoutMs: this.timeoutMs,
       },
       knownCompatibility: {
         academicScope: "scholar",
@@ -354,6 +480,8 @@ export class MetasoClient {
         readerFormatControlledByAcceptHeader: true,
         bookshelfUrlEncoding: "application/x-www-form-urlencoded",
         http200MayContainBusinessError: true,
+        identifierFieldsReturnedAsStrings: true,
+        thinkingModelsStreamedUpstream: true,
       },
     };
   }
@@ -361,7 +489,7 @@ export class MetasoClient {
   requireApiKey() {
     if (!this.apiKey) {
       throw new MetasoError(
-        "METASO_API_KEY is not configured. Add it as a Codex secret or process environment variable.",
+        "METASO_API_KEY is unavailable. For the bundled Codex plugin on macOS, run scripts/import-metaso-key.command to save it in Login Keychain, then fully restart Codex; for a standalone MCP server, configure its env entry.",
         { channel: "configuration", code: "MISSING_API_KEY" },
       );
     }
@@ -556,11 +684,13 @@ export class MetasoClient {
         code: "INVALID_FORMAT",
       });
     }
+    const requestedStream = optionalBoolean(input.stream, "stream");
+    const forceSafeThinkingStream = !requestedStream && new Set(["fast_thinking", "ds-r1"]).has(model);
     const payload = {
       model,
       scope,
       format,
-      stream: optionalBoolean(input.stream, "stream"),
+      stream: requestedStream || forceSafeThinkingStream,
       conciseSnippet: optionalBoolean(
         input.concise_snippet ?? input.conciseSnippet,
         "concise_snippet",
@@ -596,9 +726,46 @@ export class MetasoClient {
       accept: payload.stream ? "text/event-stream" : "application/json",
       retryable: false,
     });
-    if (!payload.stream) return response.data;
+    if (!payload.stream) return sanitizeAnswerResponse(response.data);
     const events = parseSseText(response.text);
-    return { ...aggregateChatSse(events), eventCount: events.length };
+    const aggregate = aggregateChatSse(events);
+    const sanitized = stripExposedReasoningTrace(aggregate.content);
+    const normalizedAggregate = {
+      ...aggregate,
+      content: sanitized.text.trim(),
+      eventCount: events.length,
+      ...(sanitized.filtered ? { reasoningTraceFiltered: true } : {}),
+    };
+    if (!forceSafeThinkingStream) return normalizedAggregate;
+
+    const common = {
+      sources: normalizedAggregate.citations,
+      highlights: normalizedAggregate.highlights,
+      usage: normalizedAggregate.usage,
+      model: normalizedAggregate.model ?? model,
+      finishReason: normalizedAggregate.finishReason,
+      eventCount: normalizedAggregate.eventCount,
+      streamedUpstream: true,
+      ...(normalizedAggregate.reasoningTraceFiltered
+        ? { reasoningTraceFiltered: true }
+        : {}),
+      ...(normalizedAggregate.usage?.credits !== undefined
+        ? { credits: normalizedAggregate.usage.credits }
+        : {}),
+    };
+    if (format === "chat_completions") {
+      return {
+        ...common,
+        choices: [
+          {
+            index: 0,
+            message: { role: "assistant", content: normalizedAggregate.content },
+            finish_reason: normalizedAggregate.finishReason ?? null,
+          },
+        ],
+      };
+    }
+    return { ...common, answer: normalizedAggregate.content };
   }
 
   async openSearch(input) {

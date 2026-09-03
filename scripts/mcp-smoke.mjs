@@ -11,7 +11,12 @@ const pluginRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const stateDirectory = await mkdtemp(join(tmpdir(), "metaso-mcp-smoke-"));
 const child = spawn(process.execPath, [join(pluginRoot, "mcp/server.mjs"), "--stdio"], {
   cwd: pluginRoot,
-  env: { ...process.env, METASO_STATE_DIR: stateDirectory, METASO_API_KEY: "" },
+  env: {
+    ...process.env,
+    METASO_STATE_DIR: stateDirectory,
+    METASO_API_KEY: "",
+    METASO_DISABLE_KEYCHAIN: "true",
+  },
   stdio: ["pipe", "pipe", "pipe"],
 });
 
@@ -75,6 +80,7 @@ try {
   const tools = messages.find((message) => message.id === 2);
   const capabilities = messages.find((message) => message.id === 3);
   assert.equal(initialize.result.protocolVersion, "2025-06-18");
+  assert.equal(initialize.result.serverInfo.version, "0.2.0");
   assert.equal(tools.result.tools.length, 17);
   assert.equal(capabilities.result.structuredContent.authenticated, false);
   assert.equal(capabilities.result.structuredContent.researchFrontier.enabled, false);
