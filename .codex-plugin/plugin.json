@@ -1,11 +1,12 @@
 {
   "name": "metaso-search-neo",
-  "version": "0.2.0+codex.20260916041330",
+  "version": "0.2.0+codex.20260916051924",
   "description": "MetaSo search, Reader, cited answers, bounded deep research, and topic knowledge-base tools for Codex.",
   "author": {
     "name": "JASON Studio"
   },
-  "homepage": "https://github.com/jasonhejiahuan/metaso-search-neo",
+  "homepage": "https://github.com/jasonhejiahuan/metaso-search-neo#readme",
+  "repository": "https://github.com/jasonhejiahuan/metaso-search-neo",
   "license": "MIT",
   "keywords": [
     "metaso",
