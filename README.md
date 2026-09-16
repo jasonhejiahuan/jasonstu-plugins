@@ -1,4 +1,4 @@
-# MetaSo Search Neo Marketplace
+# JASON Studio Plugins
 
 This repository is a Codex plugin marketplace maintained by JASON Studio. It contains [MetaSo Search Neo](plugins/metaso-search-neo/README.md), a local MCP server and five focused skills for search, webpage reading, cited answers, deep research, and topic knowledge bases.
 
@@ -7,7 +7,7 @@ This repository is a Codex plugin marketplace maintained by JASON Studio. It con
 Use Codex CLI to add this repository as a marketplace, then install the plugin:
 
 ```bash
-codex plugin marketplace add jasonhejiahuan/metaso-search-neo
+codex plugin marketplace add jasonhejiahuan/jasonstu-plugins
 codex plugin add metaso-search-neo@jasonstu-plugins
 ```
 

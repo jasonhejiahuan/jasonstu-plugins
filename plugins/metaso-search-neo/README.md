@@ -2,6 +2,8 @@
 
 This Codex Plugin packages a dependency-free local MCP server and five focused skills around MetaSo's public and Open APIs.
 
+Distributed in the [JASON Studio Plugins marketplace](https://github.com/jasonhejiahuan/jasonstu-plugins). The marketplace ID is `jasonstu-plugins`; the plugin ID remains `metaso-search-neo`.
+
 First-time setup: see [QUICKSTART.md](QUICKSTART.md) for API Key configuration and verification.
 
 ## Capabilities

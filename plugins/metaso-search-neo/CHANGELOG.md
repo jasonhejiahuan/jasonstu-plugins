@@ -1,3 +1,7 @@
+## 2026-09-16 Marketplace repository rename
+
+- Rename the GitHub repository to `jasonstu-plugins` and align the plugin's published links and installation instructions with the `JASON Studio Plugins` marketplace.
+
 ## 2026-09-16 GitHub Marketplace packaging
 
 - Place the plugin under `plugins/metaso-search-neo/` and add the repository marketplace catalog at `.agents/plugins/marketplace.json`.
