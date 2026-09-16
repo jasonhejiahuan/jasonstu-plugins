@@ -1,3 +1,8 @@
+## 2026-09-16 GitHub Marketplace packaging
+
+- Place the plugin under `plugins/metaso-search-neo/` and add the repository marketplace catalog at `.agents/plugins/marketplace.json`.
+- Publish installation and upgrade commands in the repository README while keeping the tested Codex MCP configuration intact.
+
 ## 2026-09-16 Frontier resource policy
 
 - Frontier searches use the API guide's maximum size 100; cumulative round/source/Reader ceilings are removed using null budgets.

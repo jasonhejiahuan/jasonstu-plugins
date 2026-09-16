@@ -1,0 +1,20 @@
+{
+  "name": "jasonstu-plugins",
+  "interface": {
+    "displayName": "JASON Studio Plugins"
+  },
+  "plugins": [
+    {
+      "name": "metaso-search-neo",
+      "source": {
+        "source": "local",
+        "path": "./plugins/metaso-search-neo"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
