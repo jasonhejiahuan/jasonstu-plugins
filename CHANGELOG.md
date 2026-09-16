@@ -1,3 +1,9 @@
+## 2026-09-16 Frontier resource policy
+
+- Frontier searches use the API guide's maximum size 100; cumulative round/source/Reader ceilings are removed using null budgets.
+- Add evidence-driven stopping, query reuse, selective Reader verification, and explicit resource-policy diagnostics.
+- Distinguish API limits and account quotas from local orchestration bounds; teach the skills to expand only while evidence quality benefits.
+
 ## 2026-09-16 API and skill architecture update
 
 - Split into five focused skills with distinct discovery names.

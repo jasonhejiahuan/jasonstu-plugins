@@ -70,10 +70,12 @@ The plugin returns compact event counts instead of the duplicate raw event list 
 
 `metaso_research_frontier` stores a plugin-global profile outside the immutable plugin package. Default state is disabled. When enabled, it raises only unspecified defaults:
 
-- search size 20;
+- search size 100 (maximum in the supplied API guide; actual count may be lower);
 - answer model `fast_thinking`;
 - native research `enableMix=true` and `newEngine=true`;
-- deep research uses deep/3 rounds/up to 48 sources/12 Reader calls/critique and revision.
+- deep research uses deep/null round, source, and Reader budgets/critique and revision. Null removes the plugin count ceiling; explicit numeric budgets and explicit quick/standard depth take precedence.
+
+There is no known documented task-wide API maximum for rounds, sources, or Reader calls. These are plugin orchestration concepts. Account quota, rate limits, and explicit task budgets still apply. The optional pipeline stops when its planner returns an empty array, repeats previous queries, or a round adds no new sources; invalid follow-up plans stop expansion and appear in diagnostics. With no Reader count ceiling, it selects useful pages in prompt-sized batches instead of reading every hit. Query batches, concurrent requests, and prompt/excerpt windows are implementation bounds rather than API maxima. Use direct host-driven tools and topic-level evidence summaries for research beyond a single synthesis window.
 
 Explicit call arguments take precedence. Raw content remains explicit.
 

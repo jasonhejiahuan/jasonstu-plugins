@@ -1,6 +1,6 @@
 import { MetasoError } from "./metaso-client.mjs";
 import { runDeepResearch } from "./deep-research.mjs";
-import { FRONTIER_NAME } from "./settings.mjs";
+import { FRONTIER_NAME, FRONTIER_RESOURCE_POLICY } from "./settings.mjs";
 import { validateToolArguments } from "./schema.mjs";
 import { basename } from "node:path";
 
@@ -148,10 +148,10 @@ const TOOLS = [
         language: { type: "string", default: "zh" },
         scopes: { type: "array", minItems: 1, uniqueItems: true, items: SEARCH_SCOPE_SCHEMA },
         model: MODEL_SCHEMA,
-        max_iterations: { type: "integer", minimum: 1, maximum: 4 },
-        queries_per_round: { type: "integer", minimum: 1, maximum: 6 },
-        max_sources: { type: "integer", minimum: 5, maximum: 60 },
-        max_reads: { type: "integer", minimum: 0, maximum: 15 },
+        max_iterations: { type: ["integer", "null"], minimum: 1, description: "Optional task budget; null removes the plugin round ceiling and enables evidence-driven stopping." },
+        queries_per_round: { type: "integer", minimum: 1, description: "Planner batch size, not an API limit or a target to fill." },
+        max_sources: { type: ["integer", "null"], minimum: 5, description: "Optional task budget; null removes the plugin source ceiling." },
+        max_reads: { type: ["integer", "null"], minimum: 0, description: "Optional task budget; null selects useful Reader pages without a fixed count ceiling." },
         allow_high_cost: {
           type: "boolean",
           default: false,
@@ -378,7 +378,7 @@ function frontierDefaults(toolName, args, enabled) {
   if (!enabled) return { ...args };
   switch (toolName) {
     case "metaso_search":
-      return args.size === undefined && args.page === undefined ? { size: 20, ...args } : { ...args };
+      return args.size === undefined && args.page === undefined ? { size: 100, ...args } : { ...args };
     case "metaso_answer":
       return { model: "fast_thinking", ...args };
     case "metaso_research":
@@ -389,9 +389,9 @@ function frontierDefaults(toolName, args, enabled) {
       }
       return {
         depth: "deep",
-        max_iterations: 3,
-        max_sources: 48,
-        max_reads: 12,
+        max_iterations: null,
+        max_sources: null,
+        max_reads: null,
         model: "fast_thinking",
         allow_high_cost: true,
         ...args,
@@ -464,6 +464,7 @@ export async function callTool(name, args, context) {
         researchFrontier: {
           name: FRONTIER_NAME,
           enabled: current.researchFrontier,
+          resourcePolicy: FRONTIER_RESOURCE_POLICY,
           default: false,
           firstUseNoticeShown: current.firstUseNoticeShown,
           stateWarning: settings.warning,
@@ -486,10 +487,11 @@ export async function callTool(name, args, context) {
       return toolResult(name, {
         name: FRONTIER_NAME,
         enabled: current.researchFrontier,
+        resourcePolicy: FRONTIER_RESOURCE_POLICY,
         scope: "plugin-global",
         stateWarning: settings.warning,
         message: current.researchFrontier
-          ? "Research Frontier is enabled. Higher-depth defaults apply to later research calls."
+          ? "Research Frontier is enabled. Search defaults to size=100; task-wide plugin resource ceilings are removed. Expand only while evidence quality benefits."
           : "Research Frontier is disabled. Standard defaults apply.",
       });
     }

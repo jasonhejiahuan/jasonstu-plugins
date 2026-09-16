@@ -1,6 +1,6 @@
 # MetaSo Search Neo for Codex
 
-This Codex Plugin packages a dependency-free local MCP server and a research Skill around MetaSo's public and Open APIs.
+This Codex Plugin packages a dependency-free local MCP server and five focused skills around MetaSo's public and Open APIs.
 
 First-time setup: see [QUICKSTART.md](QUICKSTART.md) for API Key configuration and verification.
 
@@ -48,12 +48,15 @@ The plugin never reads another MCP server's process environment. Explicit `METAS
 
 When enabled, later calls use higher defaults where the caller did not already choose values:
 
-- search defaults to 20 results;
+- search defaults to `size=100`, the maximum in the supplied API guide (returned counts can be lower);
 - answer defaults to `fast_thinking`;
 - native research enables `enableMix` and `newEngine`;
-- deep research defaults to deep, 3 rounds, up to 48 sources, 12 Reader fetches, and critique/revision.
+- deep research uses `null` round/source/Reader budgets: no plugin count ceiling, with evidence-driven stopping and selective Reader verification;
+- explicit numeric task budgets and quick/standard depth overrides still take precedence.
 
-It does not automatically enable `include_raw_content`; raw webpage retrieval remains explicit.
+No documented task-wide API maximum is known. Account quotas, API rate limits, and user budgets still apply. The host model expands research only for material evidence gaps, reuses results, and stops low-value or duplicate calls. Null budgets do not mean spending until credits run out. The optional pipeline's concurrency and prompt/excerpt windows are implementation bounds, not API resource limits; large tasks should use host-driven topic batches.
+
+It does not automatically enable `includeRawContent`; raw webpage retrieval remains explicit.
 
 Use the `metaso_research_frontier` MCP tool with `status`, `enable`, or `disable`.
 

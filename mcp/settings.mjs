@@ -13,8 +13,16 @@ function defaults() {
 
 export const FRONTIER_NAME = "前沿研究模式（Research Frontier）";
 
+export const FRONTIER_RESOURCE_POLICY = {
+  searchSize: 100,
+  searchPageMaximum: 10,
+  taskLimits: { rounds: null, sources: null, readerFetches: null },
+  limitSource: "Search size/page follow the supplied official API guide. No documented task-wide API maximum is known; null removes plugin count ceilings, not account quotas.",
+  strategy: "Maximize useful evidence: search unresolved gaps, deduplicate queries and URLs, selectively read primary evidence, stop when sufficient or when further work adds no value. Honor explicit task budgets and API quota/rate-limit responses.",
+};
+
 export const FRONTIER_NOTICE =
-  "提示：当前使用标准研究配置。本插件还提供“前沿研究模式（Research Frontier）”，可通过 metaso_research_frontier 设置为 enable 全局启用；启用后会增加检索轮次、来源数量、全文读取和交叉验证，并优先使用思考模型。";
+  "提示：当前使用标准研究配置。本插件还提供“前沿研究模式（Research Frontier）”，可通过 metaso_research_frontier 设置为 enable 全局启用；启用后单次搜索默认 size=100，取消插件累计轮次、来源和 Reader 次数上限，按证据价值扩展并及时停止无收益调用，仍受 API 配额和用户预算约束。";
 
 function defaultStateDirectory() {
   if (process.env.METASO_STATE_DIR) return resolve(process.env.METASO_STATE_DIR);
