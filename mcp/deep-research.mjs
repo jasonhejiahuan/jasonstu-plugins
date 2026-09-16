@@ -146,7 +146,6 @@ function normalizePlannedQueries(value, scopes, limit, question, round, language
   for (const item of value ?? []) {
     const query = typeof item === "string" ? item : item?.query;
     let scope = typeof item === "object" ? item?.scope : undefined;
-    if (scope === "paper") scope = "scholar";
     if (typeof query !== "string" || !query.trim()) continue;
     if (!ALLOWED_SCOPES.has(scope)) scope = scopes[normalized.length % scopes.length];
     const key = `${scope}\n${query.trim().toLowerCase()}`;
@@ -464,7 +463,7 @@ export async function runDeepResearch(client, input = {}) {
   const preset = PRESETS[depth];
   const language = String(input.language ?? "zh");
   const scopes = (input.scopes ?? ["webpage", "scholar", "document"]).map((scope) =>
-    scope === "paper" ? "scholar" : scope,
+    scope,
   );
   if (!scopes.length || scopes.some((scope) => !ALLOWED_SCOPES.has(scope))) {
     throw new MetasoError("scopes contains an unsupported search scope", {
@@ -534,7 +533,7 @@ export async function runDeepResearch(client, input = {}) {
       model: "fast",
       format: "simple",
       stream: false,
-      concise_snippet: true,
+      conciseSnippet: true,
     });
     creditsObserved += creditsFrom(plannerResponse);
     const planned = normalizePlannedQueries(
@@ -548,16 +547,16 @@ export async function runDeepResearch(client, input = {}) {
     queryPlan.push({ round: round + 1, queries: planned });
 
     const remaining = Math.max(1, maxSources - sources.length);
-    const size = Math.max(1, Math.min(5, Math.ceil(remaining / planned.length)));
+    const size = remaining > 20 ? 50 : 20;
     const searchResults = await mapWithConcurrency(planned, 3, async (plan) => {
       try {
         const result = await client.search({
-          query: plan.query,
+          q: plan.query,
           scope: plan.scope,
           size,
-          include_summary: plan.scope === "webpage",
-          include_raw_content: false,
-          concise_snippet: true,
+          includeSummary: plan.scope === "webpage",
+          includeRawContent: false,
+          conciseSnippet: true,
         });
         return { plan, result };
       } catch (error) {

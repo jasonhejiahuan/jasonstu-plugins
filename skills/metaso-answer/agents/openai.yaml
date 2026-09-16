@@ -1,0 +1,5 @@
+interface:
+  display_name: "MetaSo Answer"
+  short_description: "Answer questions with retrieval and citations"
+  brand_color: "#2457D6"
+  default_prompt: "Use $metaso-answer for this request."

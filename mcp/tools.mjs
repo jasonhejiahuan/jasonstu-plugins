@@ -6,13 +6,14 @@ import { basename } from "node:path";
 
 const SEARCH_SCOPE_SCHEMA = {
   type: "string",
-  enum: ["webpage", "document", "scholar", "image", "video", "podcast", "paper"],
-  description: "Search scope. paper is accepted as a compatibility alias and converted to scholar.",
+  enum: ["webpage", "document", "scholar", "image", "video", "podcast"],
+  description: "Official REST search scope.",
 };
 
 const MODEL_SCHEMA = {
   type: "string",
   enum: ["fast", "fast_thinking", "ds-r1"],
+  description: "Reasoning/latency choice: fast (off), fast_thinking (low), ds-r1 (high). These are API model values, not a reasoning_effort field; do not infer higher credit cost from model alone.",
 };
 
 const TOOLS = [
@@ -56,19 +57,16 @@ const TOOLS = [
       "Search webpages, documents, scholarly works, images, videos, or podcasts. Returns structured MetaSo results and per-call credits. size and page are mutually exclusive; raw content is webpage-only.",
     inputSchema: {
       type: "object",
-      required: ["query"],
+      required: ["q"],
+      not: { required: ["size", "page"] },
       properties: {
-        query: { type: "string", minLength: 1 },
+        q: { type: "string", minLength: 1, description: "Search query (official API name)." },
         scope: SEARCH_SCOPE_SCHEMA,
-        size: { type: "integer", minimum: 1, maximum: 100 },
-        page: { type: "integer", minimum: 1, maximum: 10 },
-        include_summary: { type: "boolean", default: false },
-        include_raw_content: {
-          type: "boolean",
-          default: false,
-          description: "Fetch full source text. Webpage-only and may add credits per result.",
-        },
-        concise_snippet: { type: "boolean", default: true },
+        size: { type: "integer", enum: [10, 20, 30, 40, 50, 100], description: "Prefer 10, 20, 30, 40, 50, or 100. An upper target, not guaranteed count; use 50 or 100 for broader retrieval." },
+        page: { oneOf: [{ type: "integer", minimum: 1, maximum: 10 }, { type: "string", enum: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"] }], description: "Alternative to size; official page control (1-10, ten results per page). Sent as a string." },
+        includeSummary: { type: "boolean", description: "Enhance recall using webpage summaries." },
+        includeRawContent: { type: "boolean", description: "Fetch full source text; webpage only." },
+        conciseSnippet: { type: "boolean", description: "Return about three sentences of original matching text." },
       },
       additionalProperties: false,
     },
@@ -112,7 +110,7 @@ const TOOLS = [
         model: MODEL_SCHEMA,
         format: { type: "string", enum: ["simple", "chat_completions"] },
         stream: { type: "boolean", default: false },
-        concise_snippet: { type: "boolean", default: true },
+        conciseSnippet: { type: "boolean", description: "Return about three sentences of original matching text." },
       },
       oneOf: [{ required: ["question"] }, { required: ["messages"] }],
       additionalProperties: false,

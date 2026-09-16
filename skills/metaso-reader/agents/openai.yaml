@@ -1,0 +1,5 @@
+interface:
+  display_name: "MetaSo Reader"
+  short_description: "Extract a webpage as Markdown or JSON"
+  brand_color: "#2457D6"
+  default_prompt: "Use $metaso-reader for this request."

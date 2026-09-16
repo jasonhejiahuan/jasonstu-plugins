@@ -42,7 +42,7 @@ test("non-research mutations do not consume the first-answer Frontier notice", a
     };
     const context = { client, settings: fixture.settings };
     const created = await callTool("metaso_topic_create", { name: "Topic" }, context);
-    const searched = await callTool("metaso_search", { query: "answer" }, context);
+    const searched = await callTool("metaso_search", { q: "answer" }, context);
     assert.doesNotMatch(created.content[0].text, /Research Frontier/);
     assert.match(searched.content[0].text, /Research Frontier/);
   } finally {
@@ -54,7 +54,7 @@ test("server-side schema validation rejects undeclared and ambiguous arguments",
   const fixture = await temporarySettings();
   try {
     const context = { client: {}, settings: fixture.settings };
-    const extra = await callTool("metaso_search", { query: "x", unsupported: true }, context);
+    const extra = await callTool("metaso_search", { q: "x", unsupported: true }, context);
     const ambiguous = await callTool(
       "metaso_answer",
       { question: "x", messages: [{ role: "user", content: "x" }] },
@@ -225,8 +225,8 @@ test("first successful research call emits exactly one Frontier notice", async (
       search: async () => ({ credits: 3, webpages: [] }),
     };
     const context = { client, settings: fixture.settings };
-    const first = await callTool("metaso_search", { query: "first" }, context);
-    const second = await callTool("metaso_search", { query: "second" }, context);
+    const first = await callTool("metaso_search", { q: "first" }, context);
+    const second = await callTool("metaso_search", { q: "second" }, context);
     assert.match(first.content[0].text, /Research Frontier/);
     assert.equal(first.structuredContent.pluginNotice.includes("前沿研究模式"), true);
     assert.doesNotMatch(second.content[0].text, /Research Frontier/);

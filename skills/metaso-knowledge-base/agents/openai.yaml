@@ -1,0 +1,5 @@
+interface:
+  display_name: "MetaSo Knowledge Base"
+  short_description: "Upload and search topic files and manage resources"
+  brand_color: "#2457D6"
+  default_prompt: "Use $metaso-knowledge-base for this request."

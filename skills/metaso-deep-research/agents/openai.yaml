@@ -1,0 +1,5 @@
+interface:
+  display_name: "MetaSo Deep Research"
+  short_description: "Plan and verify multi-source research reports"
+  brand_color: "#2457D6"
+  default_prompt: "Use $metaso-deep-research for this request."

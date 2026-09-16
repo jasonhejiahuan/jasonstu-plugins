@@ -1,3 +1,14 @@
+## 2026-09-16 API and skill architecture update
+
+- Split into five focused skills with distinct discovery names.
+- Make host-driven research the primary skill workflow; keep bounded orchestration optional.
+
+- Expose official search/answer parameter names; retire legacy aliases.
+- Accept page strings and document recommended sizes, partial result counts, and snippet/summary semantics.
+- Use messages and omitted default format/webpage scope for chat completions.
+- Preserve citations across SSE chunks, reject stream errors, and accept JSON fallback responses.
+- Document reasoning/latency model choices and the official remote MCP alternative.
+
 # Changelog
 
 ## 0.2.0 — 2026-09-03

@@ -26,7 +26,7 @@ Read this reference when selecting advanced parameters, interpreting failures, o
 
 ## Stable enums
 
-Search scopes are `webpage`, `document`, `scholar`, `image`, `video`, and `podcast`. The plugin accepts `paper` only as an alias and converts it to `scholar` before calling MetaSo.
+Search scopes are `webpage`, `document`, `scholar`, `image`, `video`, and `podcast`. Use `paper` only when working with the separate official remote MCP schema.
 
 Chat models are `fast`, `fast_thinking`, and `ds-r1`. Always pass an explicit model; MetaSo's omitted/invalid-model behavior is not reliable.
 
@@ -34,7 +34,9 @@ All returned identifier fields are normalized to strings before JavaScript numbe
 
 ## Request invariants
 
-- Search `size` and `page` are mutually exclusive.
+- Search `size` and `page` are mutually exclusive. Prefer the UI sizes 10/20/30/40/50/100. Page accepts integer or digit string 1–10 and is serialized as a string. Neither control guarantees the returned count.
+- Official `q`, `includeSummary`, `includeRawContent`, and `conciseSnippet` names are exposed by the tools without legacy aliases.
+- Answer defaults to `chat_completions` (omitted upstream); only explicit `simple` is sent. Questions are serialized as `messages`. Webpage scope is omitted upstream. Model is a reasoning/latency choice, not a cost multiplier.
 - `include_raw_content` is webpage-only and can add credits per returned page.
 - Reader response format is controlled by the HTTP `Accept` header. The client handles this.
 - Bookshelf URL import must be `application/x-www-form-urlencoded`; JSON URL bodies can return a business 500.
@@ -87,8 +89,16 @@ Uploads likewise remain successful if optional readiness polling later fails. In
 
 ## Deep-research validation
 
-The high-cost gate uses an estimated upper bound based on planner rounds, planned search calls, Reader calls, synthesis/critique, and a possible citation repair. A standard label does not bypass the gate when custom limits are large.
+The optional bounded pipeline high-cost gate uses an estimated upper bound based on planner rounds, planned search calls, Reader calls, synthesis/critique, and a possible citation repair. A standard label does not bypass the gate when custom limits are large.
 
 After synthesis, every `[S#]` marker is checked against the returned source registry. Missing or unknown IDs trigger one repair pass. If validation still fails, the report is prefixed with a warning and `diagnostics.citationValidation.valid` remains false. Semantic support is additionally reviewed by the model in deep mode, but deterministic validation proves only citation-ID integrity.
 
 Native MetaSo `[[n]]` markers are resolved against that answer response's source array and converted to stable registry IDs. Unmapped native markers fail validation. The registry never exceeds `max_sources`, including sources introduced by synthesis or repair. English, Simplified Chinese, Japanese, and Korean receive deterministic script-ratio checks and locale-specific fallback queries. Other languages use neutral fallback queries and are explicitly reported as unchecked rather than being overclaimed as validated.
+
+## Official remote MCP alternative
+
+The bundled server keeps using REST to expose the full parameter set and preserve local topic/research tools. No additional remote connection is required. Official endpoint: `https://metaso.cn/api/mcp`, authenticated with an `Authorization: Bearer <API key>` header. Never store an actual key in documentation.
+
+The supplied official MCP guide lists `metaso_web_search` (`q`, `scope`, `includeSummary`, `includeRawContent`, `size`), `metaso_web_reader` (`url`, `format: json|markdown`), and `metaso_chat` (`message`, `model`). Its search scholarly scope is `paper`; REST is `scholar`. Do not assume remote MCP exposes every REST option; inspect its advertised schema when connecting.
+
+API reference checked 2026-09-16: https://metaso.cn/search-api/playground . The user's supplied API examples provide the detailed options; the attached result.json is response-shape evidence only, not verified factual content.

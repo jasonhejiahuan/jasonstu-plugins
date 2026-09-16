@@ -13,7 +13,7 @@ function response(body, options = {}) {
   });
 }
 
-test("search normalizes paper to scholar and preserves structured response", async () => {
+test("search sends scholar and preserves structured response", async () => {
   let captured;
   const client = new MetasoClient({
     apiKey: "test-key",
@@ -22,7 +22,7 @@ test("search normalizes paper to scholar and preserves structured response", asy
       return response({ credits: 3, scholars: [{ title: "Paper" }], total: 1 });
     },
   });
-  const result = await client.search({ query: "test", scope: "paper", size: 1 });
+  const result = await client.search({ q: "test", scope: "scholar", size: 10 });
   assert.equal(captured.url, "https://metaso.cn/api/v1/search");
   assert.equal(captured.body.scope, "scholar");
   assert.equal(captured.options.headers.Authorization, "Bearer test-key");
@@ -35,7 +35,7 @@ test("search rejects mutually exclusive size and page before network", async () 
     fetchImpl: async () => assert.fail("fetch should not run"),
   });
   await assert.rejects(
-    client.search({ query: "test", size: 1, page: 1 }),
+    client.search({ q: "test", size: 10, page: 1 }),
     (error) => error instanceof MetasoError && error.code === "MUTUALLY_EXCLUSIVE",
   );
 });
@@ -46,7 +46,7 @@ test("HTTP 200 business errors are rejected", async () => {
     fetchImpl: async () => response({ errCode: 2005, errMsg: "API密钥无效" }),
   });
   await assert.rejects(
-    client.search({ query: "test" }),
+    client.search({ q: "test" }),
     (error) => error instanceof MetasoError && error.code === 2005 && error.channel === "business",
   );
 });
@@ -226,7 +226,7 @@ test("English thinking-process wrappers and streamed traces are removed", async 
       return response(forcedStreamBody, { contentType: "text/event-stream" });
     },
   });
-  const nonStream = await nonStreamClient.answer({ question: "test", model: "fast_thinking" });
+  const nonStream = await nonStreamClient.answer({ question: "test", model: "fast_thinking", format: "simple" });
   assert.equal(nonStream.answer, "Final answer.");
   assert.equal(nonStream.reasoningTraceFiltered, true);
   assert.equal(nonStream.streamedUpstream, true);

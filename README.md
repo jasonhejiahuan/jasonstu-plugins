@@ -83,3 +83,13 @@ npm run smoke
 ```
 
 The official MetaSo favicon is included as `assets/favicon.ico`; `assets/metaso-icon.png` is a 128×128 conversion used by the Codex UI. MetaSo names and artwork remain the property of their respective owner and are not covered by this repository's MIT license.
+
+## Focused skills
+
+- **MetaSo Search** (`$metaso-search-neo`): Search web, academic, and media sources.
+- **MetaSo Reader** (`$metaso-reader`): Extract a webpage as Markdown or JSON.
+- **MetaSo Answer** (`$metaso-answer`): Answer questions with retrieval and citations.
+- **MetaSo Deep Research** (`$metaso-deep-research`): Plan and verify multi-source research reports.
+- **MetaSo Knowledge Base** (`$metaso-knowledge-base`): Upload and search topic files and manage resources.
+
+The public API tools accept official camelCase flags. Search uses `q` and string page values. Answer defaults to OpenAI-compatible messages and chat_completions; request simple format explicitly.

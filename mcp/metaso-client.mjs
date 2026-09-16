@@ -97,10 +97,10 @@ function optionalBoolean(value, name, fallback = false) {
 
 function normalizeScope(value, fallback = "webpage") {
   if (value === undefined || value === null || value === "") return fallback;
-  const scope = value === "paper" ? "scholar" : String(value);
+  const scope = String(value);
   if (!SEARCH_SCOPES.has(scope)) {
     throw new MetasoError(
-      `scope must be one of ${[...SEARCH_SCOPES].join(", ")}; paper is accepted as an alias for scholar`,
+      `scope must be one of ${[...SEARCH_SCOPES].join(", ")}`,
       { channel: "validation", code: "INVALID_SCOPE" },
     );
   }
@@ -319,6 +319,10 @@ function aggregateChatSse(events) {
   };
   for (const event of events) {
     if (!event || typeof event !== "object") continue;
+    const error = detectBusinessError(event) ?? (event.error ? { code: event.error.code, message: event.error.message ?? String(event.error) } : null);
+    if (error) throw new MetasoError(error.message, { channel: "business", code: error.code });
+    if (event.credits !== undefined) result.usage.credits = event.credits;
+    if (Array.isArray(event.citations)) result.citations.push(...event.citations);
     if (event.model) result.model = event.model;
     if (event.usage && typeof event.usage === "object") {
       result.usage = { ...result.usage, ...event.usage };
@@ -326,8 +330,8 @@ function aggregateChatSse(events) {
     for (const choice of event.choices ?? []) {
       const delta = choice.delta ?? {};
       if (typeof delta.content === "string") result.content += delta.content;
-      if (Array.isArray(delta.citations)) result.citations = delta.citations;
-      if (Array.isArray(delta.highlights)) result.highlights = delta.highlights;
+      if (Array.isArray(delta.citations)) result.citations.push(...delta.citations);
+      if (Array.isArray(delta.highlights)) result.highlights.push(...delta.highlights);
       if (choice.finish_reason) result.finishReason = choice.finish_reason;
     }
   }
@@ -469,14 +473,15 @@ export class MetasoClient {
       bookshelf: true,
       experimentalRemoteMcp: false,
       limits: {
-        searchSize: [1, 100],
+        searchSize: [10, 20, 30, 40, 50, 100],
+        recommendedSearchSizes: [10, 20, 30, 40, 50, 100],
         searchPage: [1, 10],
         maxUploadBytes: this.maxUploadBytes,
         requestTimeoutMs: this.timeoutMs,
       },
       knownCompatibility: {
         academicScope: "scholar",
-        paperAliasAcceptedLocally: true,
+        paperAliasAcceptedLocally: false,
         readerFormatControlledByAcceptHeader: true,
         bookshelfUrlEncoding: "application/x-www-form-urlencoded",
         http200MayContainBusinessError: true,
@@ -600,10 +605,14 @@ export class MetasoClient {
 
   async search(input) {
     assertObject(input);
-    const query = assertNonEmptyString(input.query ?? input.q, "query");
+    const query = assertNonEmptyString(input.q, "query");
     const scope = normalizeScope(input.scope);
     const size = optionalInteger(input.size, "size", 1, 100);
-    const page = optionalInteger(input.page, "page", 1, 10);
+    if (size !== undefined && ![10, 20, 30, 40, 50, 100].includes(size)) {
+      throw new MetasoError("size must be 10, 20, 30, 40, 50, or 100", { channel: "validation", code: "INVALID_ARGUMENT" });
+    }
+    const pageValue = typeof input.page === "string" && /^(?:[1-9]|10)$/.test(input.page) ? Number(input.page) : input.page;
+    const page = optionalInteger(pageValue, "page", 1, 10);
     if (size !== undefined && page !== undefined) {
       throw new MetasoError("size and page are mutually exclusive", {
         channel: "validation",
@@ -611,15 +620,15 @@ export class MetasoClient {
       });
     }
     const includeSummary = optionalBoolean(
-      input.include_summary ?? input.includeSummary,
-      "include_summary",
+      input.includeSummary,
+      "includeSummary",
     );
     const includeRawContent = optionalBoolean(
-      input.include_raw_content ?? input.includeRawContent,
-      "include_raw_content",
+      input.includeRawContent,
+      "includeRawContent",
     );
     if (includeRawContent && scope !== "webpage") {
-      throw new MetasoError("include_raw_content is supported only for webpage search", {
+      throw new MetasoError("includeRawContent is supported only for webpage search", {
         channel: "validation",
         code: "RAW_CONTENT_SCOPE",
       });
@@ -630,11 +639,11 @@ export class MetasoClient {
       includeSummary,
       includeRawContent,
       conciseSnippet: optionalBoolean(
-        input.concise_snippet ?? input.conciseSnippet,
-        "concise_snippet",
+        input.conciseSnippet,
+        "conciseSnippet",
       ),
       ...(size !== undefined ? { size } : {}),
-      ...(page !== undefined ? { page } : {}),
+      ...(page !== undefined ? { page: String(page) } : {}),
     };
     const response = await this.requestJson("/api/v1/search", payload, { retryable: true });
     return response.data;
@@ -677,7 +686,7 @@ export class MetasoClient {
     assertObject(input);
     const model = normalizeModel(input.model);
     const scope = normalizeScope(input.scope);
-    const format = input.format ?? (input.messages ? "chat_completions" : "simple");
+    const format = input.format ?? "chat_completions";
     if (!new Set(["simple", "chat_completions"]).has(format)) {
       throw new MetasoError("format must be simple or chat_completions", {
         channel: "validation",
@@ -688,12 +697,12 @@ export class MetasoClient {
     const forceSafeThinkingStream = !requestedStream && new Set(["fast_thinking", "ds-r1"]).has(model);
     const payload = {
       model,
-      scope,
-      format,
+      ...(scope !== "webpage" ? { scope } : {}),
+      ...(format === "simple" ? { format } : {}),
       stream: requestedStream || forceSafeThinkingStream,
       conciseSnippet: optionalBoolean(
-        input.concise_snippet ?? input.conciseSnippet,
-        "concise_snippet",
+        input.conciseSnippet,
+        "conciseSnippet",
         true,
       ),
     };
@@ -719,14 +728,14 @@ export class MetasoClient {
         };
       });
     } else {
-      payload.q = assertNonEmptyString(input.question ?? input.q, "question");
+      payload.messages = [{ role: "user", content: assertNonEmptyString(input.question ?? input.q, "question") }];
     }
 
     const response = await this.requestJson("/api/v1/chat/completions", payload, {
       accept: payload.stream ? "text/event-stream" : "application/json",
       retryable: false,
     });
-    if (!payload.stream) return sanitizeAnswerResponse(response.data);
+    if (!payload.stream || !response.contentType.includes("text/event-stream") && typeof response.data === "object") return sanitizeAnswerResponse(response.data);
     const events = parseSseText(response.text);
     const aggregate = aggregateChatSse(events);
     const sanitized = stripExposedReasoningTrace(aggregate.content);

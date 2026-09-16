@@ -16,7 +16,7 @@ test("standard deep research plans, searches, reads, and synthesizes", async () 
       }
       return { answer: "# Result\n\nGrounded claim [S1].", credits: 6 };
     },
-    search: async ({ query }) => ({
+    search: async ({ q: query }) => ({
       credits: 3,
       webpages: [
         {
@@ -127,7 +127,7 @@ test("planner JSON survives surrounding reasoning and automatic citations map to
         credits: 6,
       };
     },
-    search: async ({ query }) => {
+    search: async ({ q: query }) => {
       searchQueries.push(query);
       return {
         credits: 3,
@@ -197,7 +197,7 @@ test("English fallback queries do not silently switch to Chinese", async () => {
       question.includes("Return ONLY a JSON array")
         ? { answer: "planner did not return JSON", credits: 6 }
         : { answer: "Supported [S1].", credits: 6 },
-    search: async ({ query }) => {
+    search: async ({ q: query }) => {
       searchQuery = query;
       return {
         credits: 3,
@@ -328,7 +328,7 @@ test("fallback query suffixes follow English, Chinese, Japanese, Korean, and neu
         question.includes("Return ONLY a JSON array")
           ? { answer: "not valid planner JSON", credits: 6 }
           : { answer: fixture.report, credits: 6 },
-      search: async ({ query }) => {
+      search: async ({ q: query }) => {
         searchQuery = query;
         return {
           credits: 3,
