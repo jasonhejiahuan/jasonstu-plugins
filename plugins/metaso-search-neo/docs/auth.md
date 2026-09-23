@@ -64,6 +64,8 @@ Relative overrides are rejected. The official `PLUGIN_DATA` environment variable
 
 The JSON file contains the API Key, display name and creation timestamp in **plaintext**. POSIX uses a current-user-owned `0700` directory and `0600` file. Windows restricts ACLs to the current account and stops when it cannot establish or verify private storage. Symlink paths, multiply linked credential files, unexpected file types and unsafe permissions are rejected. Writes use an exclusive lock and atomic publication; overwriting a credential requires `replace: true` or `--replace`.
 
+The Windows ACL-check child removes inherited `PSModulePath` so Windows PowerShell can construct compatible module paths. Without this, launching Node from PowerShell 7 can make `Get-Acl` fail to load. This changes only the child environment, not user settings or ACL checks. [Microsoft module-path guidance](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_psmodulepath?view=powershell-7.6#starting-windows-powershell-from-powershell-7)
+
 These filesystem controls protect against access by other ordinary accounts; they do not encrypt data or isolate it from processes running as the same user. Avoid repository directories, plugin caches, shared/synced folders, and backups accessible to others. `metaso_auth_status` and `--status` report the effective path and `encrypted: false` without returning the Key.
 
 ## Priority and compatibility

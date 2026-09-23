@@ -95,6 +95,9 @@ export class CredentialStore {
 
   verifyWindowsAcl(paths) {
     const sid = this.windowsSid();
+    // A Node child of PowerShell 7 inherits incompatible PS7 module paths.
+    // Let Windows PowerShell rebuild its own defaults; never relax the ACL check.
+    const environment = Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toUpperCase() !== "PSMODULEPATH"));
     // Only metadata is returned. Neither the path nor a credential is interpolated into code.
     const script = "$ErrorActionPreference='Stop'; $paths=ConvertFrom-Json -InputObject $env:METASO_ACL_TARGETS; " +
       "$s=[System.Security.Principal.SecurityIdentifier]::new($env:METASO_ACL_SID); " +
@@ -106,7 +109,7 @@ export class CredentialStore {
     const result = this.spawnSync("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script], {
       encoding: "utf8", windowsHide: true, timeout: 10_000,
       stdio: ["ignore", "pipe", "ignore"],
-      env: { ...process.env, METASO_ACL_TARGETS: JSON.stringify(Array.isArray(paths) ? paths : [paths]), METASO_ACL_SID: sid },
+      env: { ...environment, METASO_ACL_TARGETS: JSON.stringify(Array.isArray(paths) ? paths : [paths]), METASO_ACL_SID: sid },
     });
     if (result.error || result.status !== 0 || String(result.stdout ?? "").trim() !== "private") {
       fail("Credential storage must be owned by and accessible only to the current Windows account.", "UNSAFE_CREDENTIAL_STORAGE");

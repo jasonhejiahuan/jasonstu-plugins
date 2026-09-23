@@ -143,6 +143,14 @@ test("credential names accept the website's 20 UTF-16-unit boundary", (t) => {
 });
 
 test("Windows applies SID-restricted ACLs before writing any credential bytes", (t) => {
+  const priorModulePaths = Object.entries(process.env).filter(([name]) => /^PSModulePath$/i.test(name));
+  for (const [name] of priorModulePaths) delete process.env[name];
+  process.env.PSModulePath = "fixture-powershell-seven-modules";
+  process.env.pSmOdUlEpAtH = "fixture-mixed-case-modules";
+  t.after(() => {
+    for (const name of Object.keys(process.env)) if (/^PSModulePath$/i.test(name)) delete process.env[name];
+    for (const [name, value] of priorModulePaths) process.env[name] = value;
+  });
   const calls = [];
   const spawnSync = (command, args, options) => {
     calls.push({ command, args });
@@ -159,6 +167,7 @@ test("Windows applies SID-restricted ACLs before writing any credential bytes", 
       return { status: 0 };
     }
     assert.equal(command, "powershell.exe");
+    assert.equal(Object.keys(options.env).some((name) => /^PSModulePath$/i.test(name)), false);
     assert.equal(options.env.METASO_ACL_SID, "S-1-5-21-111-222-333-1001");
     assert.ok(Array.isArray(JSON.parse(options.env.METASO_ACL_TARGETS)));
     return { status: 0, stdout: "private\r\n" };
@@ -181,6 +190,19 @@ test("Windows fails closed if private ACL enforcement is unavailable", (t) => {
   });
   assert.throws(() => store.write({ key, name: "test" }), (error) => error.code === "UNSAFE_CREDENTIAL_STORAGE");
   assert.equal(existsSync(store.path), false);
+});
+
+test("native Windows rejects an additional Everyone-read ACE without replacing the credential", { skip: process.platform !== "win32" }, (t) => {
+  const { store } = fixture(t);
+  store.write({ key, name: "Windows ACL test" });
+  const before = readFileSync(store.path);
+  const result = nativeSpawnSync("icacls.exe", [store.path, "/grant", "*S-1-1-0:R"], {
+    encoding: "utf8", windowsHide: true, timeout: 10_000, stdio: "ignore",
+  });
+  assert.equal(result.status, 0, "The native ACL test must successfully grant Everyone read access before verifying rejection.");
+  assert.throws(() => store.read(), (error) => error.code === "UNSAFE_CREDENTIAL_STORAGE");
+  assert.throws(() => store.write({ key: nextKey, name: "Replacement", replace: true }), (error) => error.code === "UNSAFE_CREDENTIAL_STORAGE");
+  assert.equal(readFileSync(store.path).equals(before), true, "Unsafe credentials must not be overwritten.");
 });
 
 test("native Windows creates a private empty directory with verifiable ACLs", { skip: process.platform !== "win32" }, (t) => {
