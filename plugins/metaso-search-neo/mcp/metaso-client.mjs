@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { basename, extname, join, resolve } from "node:path";
 import { loadMetaSoCredentialFromKeychain } from "./metaso-keychain.mjs";
+import { CredentialStore } from "./credentials.mjs";
 
 const DEFAULT_BASE_URL = "https://metaso.cn";
 const DEFAULT_TIMEOUT_MS = 120_000;
@@ -431,6 +432,10 @@ function publicUrlAllowed(rawUrl) {
 export class MetasoClient {
   constructor(options = {}) {
     const environment = options.environment ?? process.env;
+    this.environment = environment;
+    this.dynamicCredentials = !Object.hasOwn(options, "apiKey") && !environment.METASO_API_KEY;
+    this.keychainLoader = options.keychainLoader ?? loadMetaSoCredentialFromKeychain;
+    this.credentialStore = options.credentialStore;
     if (Object.hasOwn(options, "apiKey")) {
       this.apiKey = options.apiKey ?? "";
       this.credentialSource = this.apiKey ? "explicit" : "none";
@@ -438,13 +443,7 @@ export class MetasoClient {
       this.apiKey = environment.METASO_API_KEY;
       this.credentialSource = "environment";
     } else {
-      const keychainLoader = options.keychainLoader ?? loadMetaSoCredentialFromKeychain;
-      const loadedCredential = keychainLoader({ environment });
-      this.apiKey =
-        typeof loadedCredential === "string" ? loadedCredential : loadedCredential?.key ?? "";
-      this.credentialProfile =
-        typeof loadedCredential === "object" ? loadedCredential?.profile ?? "" : "";
-      this.credentialSource = this.apiKey ? "macos_keychain" : "none";
+      this.refreshCredentials();
     }
     this.baseUrl = normalizeBaseUrl(options.baseUrl ?? environment.METASO_BASE_URL ?? DEFAULT_BASE_URL);
     this.fetch = options.fetchImpl ?? globalThis.fetch;
@@ -457,13 +456,50 @@ export class MetasoClient {
     if (typeof this.fetch !== "function") throw new Error("A Fetch API implementation is required");
   }
 
+  refreshCredentials() {
+    if (!this.dynamicCredentials) return;
+    this.apiKey = "";
+    this.credentialSource = "none";
+    this.credentialProfile = "";
+    this.credentialStorage = undefined;
+    this.credentialError = undefined;
+    try {
+      this.credentialStore ??= new CredentialStore({ environment: this.environment });
+      const credential = this.credentialStore.read();
+      this.credentialStorage = {
+        configured: Boolean(credential),
+        ...(credential ? { name: credential.name } : {}),
+        path: this.credentialStore.path,
+        storage: "file",
+        encrypted: false,
+      };
+      if (credential) {
+        this.apiKey = credential.key;
+        this.credentialSource = "plugin_file";
+        return;
+      }
+      const loadedCredential = this.keychainLoader({ environment: this.environment });
+      this.apiKey = typeof loadedCredential === "string" ? loadedCredential : loadedCredential?.key ?? "";
+      this.credentialProfile = typeof loadedCredential === "object" ? loadedCredential?.profile ?? "" : "";
+      this.credentialSource = this.apiKey ? "macos_keychain" : "none";
+    } catch (error) {
+      this.credentialError = {
+        code: error.code ?? "CREDENTIAL_STORE_UNAVAILABLE",
+        message: "MetaSo credential storage is unavailable or unsafe. Run metaso_auth_start or node scripts/auth.mjs to reconnect.",
+      };
+    }
+  }
+
   capabilities() {
+    this.refreshCredentials();
     return {
       backend: "direct_rest",
       baseUrl: this.baseUrl,
       authenticated: Boolean(this.apiKey),
       credentialSource: this.credentialSource,
       ...(this.credentialProfile ? { credentialProfile: this.credentialProfile } : {}),
+      ...(this.credentialStorage ? { credentialStorage: this.credentialStorage } : {}),
+      ...(this.credentialError ? { credentialError: this.credentialError } : {}),
       searchScopes: [...SEARCH_SCOPES],
       chatModels: [...CHAT_MODELS],
       reader: true,
@@ -492,9 +528,15 @@ export class MetasoClient {
   }
 
   requireApiKey() {
+    this.refreshCredentials();
+    if (this.credentialError) {
+      throw new MetasoError(this.credentialError.message, {
+        channel: "configuration", code: this.credentialError.code,
+      });
+    }
     if (!this.apiKey) {
       throw new MetasoError(
-        "METASO_API_KEY is unavailable. For the bundled Codex plugin on macOS, run scripts/import-metaso-key.command to save it in Login Keychain, then fully restart Codex; for a standalone MCP server, configure its env entry.",
+        "METASO_API_KEY is unavailable. Run metaso_auth_start or node scripts/auth.mjs to connect MetaSo, or configure METASO_API_KEY in the MCP server environment.",
         { channel: "configuration", code: "MISSING_API_KEY" },
       );
     }
@@ -502,6 +544,7 @@ export class MetasoClient {
 
   async request(path, options = {}) {
     this.requireApiKey();
+    const apiKey = this.apiKey;
     const url = new URL(path, `${this.baseUrl}/`).toString();
     const method = options.method ?? "GET";
     const retryableMethod = options.retryable ?? ["GET", "HEAD"].includes(method);
@@ -515,7 +558,7 @@ export class MetasoClient {
         const response = await this.fetch(url, {
           method,
           headers: {
-            Authorization: `Bearer ${this.apiKey}`,
+            Authorization: `Bearer ${apiKey}`,
             ...(options.headers ?? {}),
           },
           body: options.body,

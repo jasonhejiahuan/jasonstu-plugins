@@ -1,6 +1,6 @@
 # MetaSo Search Neo for Codex
 
-This Codex Plugin packages a dependency-free local MCP server and five focused skills around MetaSo's public and Open APIs.
+This Codex Plugin packages a dependency-free local MCP server and six focused skills around MetaSo's public and Open APIs. Optional browser account setup installs Playwright only when invoked.
 
 Distributed in the [JASON Studio Plugins marketplace](https://github.com/jasonhejiahuan/jasonstu-plugins). The marketplace ID is `jasonstu-plugins`; the plugin ID remains `metaso-search-neo`.
 
@@ -17,18 +17,27 @@ First-time setup: see [QUICKSTART.md](QUICKSTART.md) for API Key configuration a
 - Bookshelf import from local files or public URLs.
 - A plugin-local resource catalog that preserves IDs for topics and files created through this plugin.
 - Plugin-global **Research Frontier** mode, disabled by default.
+- Local browser setup with `metaso_auth_start`, `metaso_auth_status`, and `metaso_auth_cancel`; the Key stays in the local process and private credential file.
+
+Version 0.3.0 adds cross-platform credential-file storage and an optional browser workflow for creating or importing a named API Key. Live login, direct website-API creation, private-file storage and a subsequent search were verified on macOS; see [authentication details and verification limits](docs/auth.md).
 
 Version 0.2 preserves every API identifier as an exact string, including Open API session IDs larger than JavaScript's safe-integer limit. Thinking-model answers are streamed internally even for non-stream callers so MetaSo reasoning traces cannot leak through the public result. Aggregated streams omit duplicate raw events and deduplicate repeated citations and highlights.
 
 ## Authentication
 
-Provide the API key at runtime through the `METASO_API_KEY` environment variable or the Codex secret mechanism. Do not write a key into this plugin, `.mcp.json`, source files, or logs.
+Use the **MetaSo Auth** skill (`$metaso-auth`) or ask Codex to connect your MetaSo account. The optional local helper opens an isolated browser at the [MetaSo API Key page](https://metaso.cn/search-api/api-keys). Complete login yourself. It then uses same-origin JavaScript requests in that authenticated browser to create a uniquely named Key or import an existing exact name from the JSON response, and saves it locally without returning the secret through MCP or chat. It does not click form controls or read table/input elements. These are MetaSo's internal website endpoints, not an official stable provisioning API. It never regenerates or deletes MetaSo Keys. Ambiguous creation results stop for inspection instead of automatically resubmitting. See [website request evidence](docs/auth.md#website-request-contract-and-evidence).
 
-For the bundled MCP shown under **From plugins** in Codex Desktop on macOS, run `./scripts/import-metaso-key.command`. It prompts for a credential name and optional Keychain comment, then lets macOS Keychain collect and confirm the hidden Key directly. The script validates the stored value and deletes malformed entries. The MCP reads the selected named credential directly from Keychain each time it starts, so the Key is not injected into the user-wide launchd environment. Use `--list`, `--use NAME`, `--status`, and `--clear [NAME]` to organize and switch credentials. Do not put the Key under `[shell_environment_policy.set]`; that shell policy is not reliably forwarded to bundled plugin MCP servers. See [QUICKSTART.md](QUICKSTART.md) for migration and standalone-server instructions.
+From the plugin directory, the equivalent CLI is `node scripts/auth.mjs`; use `--name NAME`, `--import-existing --name NAME`, `--replace`, or `--status` as needed. Existing file credentials require explicit replacement. A `--stdin` mode imports a Key from redirected local input without putting it in command arguments. See [QUICKSTART.md](QUICKSTART.md) for examples.
 
-The importer deliberately refuses to overwrite an existing valid name. Rotate safely by importing a new name, switching with `--use`, verifying it, and then clearing the old name. Version 0.2 can read a selected named credential stored under the pre-release service namespace and clears both service namespaces, but it never silently activates the old unnamed `METASO_API_KEY` Keychain account.
+First browser setup requires npm and installs pinned `playwright@1.63.0` under the credential directory's `browser-runtime/1.63.0`. It tries installed Chrome/Edge before downloading Chromium to Playwright's normal OS cache. Browser setup needs a graphical desktop; normal API use does not need Playwright. [Playwright browser documentation](https://playwright.dev/docs/browsers)
 
-Keychain storage prevents passive exposure through configuration files, shell history, and ordinary logs; it is not an isolation boundary against a hostile process running as the same macOS login. Retrieval is delegated to the system `/usr/bin/security` executable, so another same-user process that knows the service and profile names may also be able to read the item.
+The Key is stored in `credential.json` under `METASO_CREDENTIALS_DIR`, else explicitly provided `PLUGIN_DATA/credentials`, else `CODEX_HOME/state/metaso-search-neo/credentials` (default `~/.codex/state/metaso-search-neo/credentials`). Overrides must be absolute paths. The file is **plaintext, not encrypted**: POSIX permissions are restricted to the current user (`0700` directory, `0600` file); Windows uses a current-user ACL and stops if it cannot enforce it. Do not place this directory in a repository, plugin cache, or shared/synced folder.
+
+Credential priority is explicit client key → `METASO_API_KEY` → plugin credential file → selected legacy macOS Keychain credential. File setup does not delete or migrate Keychain items; existing users can keep their current configuration. File-backed and fallback clients reload credentials on the next capability/API call, so a successful local connection needs no MCP restart. An explicit environment Key continues to override the file.
+
+This local setup is not native OAuth, a Codex-managed secret vault, or an automatic install hook. `ON_INSTALL` is marketplace authentication timing metadata and does not invoke this helper. Official `PLUGIN_DATA` injection is documented for plugin hooks, so bundled stdio MCP must not assume it is present. See the [OpenAI package contract](https://developers.openai.com/plugins/build/plugins#bundled-mcp-servers-and-lifecycle-hooks), [OAuth authentication contract](https://developers.openai.com/plugins/build/auth), and [local configuration guidance](https://developers.openai.com/plugins/guides/submit-claude-plugin#replace-claude-userconfig).
+
+Do not write a Key into this plugin, `.mcp.json`, source files, chat, command arguments, or logs. Do not rely on `[shell_environment_policy.set]` to forward it to a bundled MCP server.
 
 Optional environment variables:
 
@@ -38,11 +47,13 @@ Optional environment variables:
 | `METASO_TIMEOUT_MS` | `120000` | Per-request timeout |
 | `METASO_MAX_UPLOAD_BYTES` | `52428800` | Maximum local file size |
 | `METASO_STATE_DIR` | Codex state directory | Override persistent plugin settings location |
+| `METASO_CREDENTIALS_DIR` | See precedence above | Override private credential-file directory; must be absolute |
+| `PLUGIN_DATA` | Not assumed for stdio MCP | If explicitly provided, use its `credentials` subdirectory |
 | `METASO_KEY_PROFILE_DIR` | Plugin state directory | Override non-secret Keychain profile metadata location; must be absolute |
 | `METASO_DISABLE_KEYCHAIN` | `false` | Disable the macOS Keychain fallback when set to `true` |
 | `METASO_ALLOW_PRIVATE_URLS` | `false` | Test-only escape hatch for private Reader URLs |
 
-The plugin never reads another MCP server's process environment. Explicit `METASO_API_KEY` environment configuration remains available for standalone MCP and CI use and takes precedence over Keychain. Otherwise, the macOS bundled plugin reads the selected Keychain credential at process startup.
+The plugin never reads another MCP server's process environment. Explicit `METASO_API_KEY` configuration remains available for standalone MCP and CI use. The optional legacy macOS importer is still `./scripts/import-metaso-key.command`; its `--list`, `--use NAME`, and `--status` commands manage existing named Keychain profiles.
 
 ## Research Frontier
 
@@ -79,7 +90,7 @@ The deep-research source registry strictly honors `max_sources`. Native MetaSo `
 
 ## Development
 
-Requires Node.js 20 or later and no npm dependencies.
+Requires Node.js 20 or later. The core MCP server has no npm dependencies; optional browser setup installs pinned Playwright support separately.
 
 ```bash
 npm run check
@@ -91,6 +102,7 @@ The official MetaSo favicon is included as `assets/favicon.ico`; `assets/metaso-
 
 ## Focused skills
 
+- **MetaSo Auth** (`$metaso-auth`): Connect through local browser setup, inspect status, or cancel setup without exposing the Key.
 - **MetaSo Search** (`$metaso-search-neo`): Search web, academic, and media sources.
 - **MetaSo Reader** (`$metaso-reader`): Extract a webpage as Markdown or JSON.
 - **MetaSo Answer** (`$metaso-answer`): Answer questions with retrieval and citations.

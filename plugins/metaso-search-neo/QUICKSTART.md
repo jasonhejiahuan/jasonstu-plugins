@@ -1,91 +1,85 @@
 # MetaSo Search Neo Quick Start
 
-本指南面向第一次启动 MetaSo Search Neo 的用户，帮助你安全地配置 MetaSo API Key 并完成首次测试。
+0.3.0 提供本地浏览器连接流程。需要 Node.js 20+；浏览器连接还需要 npm 和可显示浏览器窗口的桌面环境。已在 macOS 验证真实账号登录、直接调用网页接口创建 Key、保存及后续搜索，详细边界见 [认证说明](docs/auth.md)。
 
-## 1. 准备 API Key
+## 1. 在聊天中连接
 
-从你的 MetaSo 开放平台账户获取 API Key。独立 MCP 可以读取名为 `METASO_API_KEY` 的环境变量；macOS 上的插件内置 MCP 也可以读取下文导入的钥匙串凭据。不要把 Key 写入插件源码、README、Git 仓库、聊天消息或截图。
+安装或更新插件后，重新启动 Codex 并打开新任务，以加载新工具。在聊天中输入：
 
-## 2. 判断 MCP 的安装形式
+> 使用 MetaSo Auth 连接我的 MetaSo 账号，为这个插件创建一个新的 API Key。
 
-打开 Codex：
+插件会打开独立浏览器窗口，进入 [MetaSo API Key 页面](https://metaso.cn/search-api/api-keys)。如果网站跳转到主页，请在该窗口中自行完成登录、验证码或扫码。登录后，程序直接在该浏览器中调用网站自己的 JavaScript 请求，创建指定名称的 Key，或从返回的 JSON 中选择唯一同名 Key，并保存到本地。程序不操作创建表单，也不读取网页表格或输入框中的 Key。你可以指定名称；最多 20 个字符，可包含中文，部分 emoji 按两个字符计数。
 
-1. 进入 **Settings → Plugins → MCPs**。
-2. 找到 `metaso-search-neo`。
-3. 根据它所在的区域选择下面对应的方法。
+首次连接会安装固定版本的 Playwright 浏览器支持，可能需要等待下载。程序优先尝试已有 Chrome 或 Edge；无法启动时下载 Chromium。普通搜索功能不需要浏览器。
 
-### 方法 A：显示在 “From plugins”（当前默认安装方式）
+连接后可以输入：
 
-插件内置 MCP 暂时没有独立的齿轮配置页。不要把 Key 写入 `[shell_environment_policy.set]`：该设置面向 Codex 启动的 agent shell，当前 Codex Desktop 不会可靠地把其中的值转发给插件内置 MCP。
+> 检查 MetaSo 连接状态。
 
-在终端运行仓库提供的导入脚本：
+需要中止时输入：
 
-```bash
-./scripts/import-metaso-key.command
-```
+> 取消当前 MetaSo 连接。
 
-脚本会依次询问：
+这些操作分别使用 `metaso_auth_start`、`metaso_auth_status`、`metaso_auth_cancel`。Key 不会返回到聊天。不要把 Key、登录密码或验证码发给 Codex。
 
-1. Key 名称：1–48 个 ASCII 字母、数字、点、下划线或连字符，例如 `work`、`personal`。
-2. 备注：可选，最多 200 个字符；同时写入 Keychain comment 并由 `--list` 显示。
-3. MetaSo API Key：由 macOS Keychain 隐藏询问并要求输入两次；保存后脚本再校验为 `mk-` 加至少 16 个 ASCII 字母或数字，格式错误时立即删除该项目。
+## 2. 已有 Key 或使用终端
 
-Key 保存在 macOS 登录钥匙串，插件 MCP 每次启动时根据当前选择的名称直接读取到内存，不再通过 `launchctl` 注入整个 GUI 登录会话。名称、备注和当前选择是非秘密元数据，保存在 Codex 状态目录。Key 不会写入脚本、`config.toml`、状态文件或终端历史。
+要使用网站上已经存在的 Key，可以告诉 Codex：
 
-这能避免 Key 被配置文件、终端历史和普通日志被动泄露，但不是针对同一 macOS 登录用户下恶意进程的隔离边界：插件通过系统 `/usr/bin/security` 工具读取钥匙串项目，同一用户下可运行该工具并知道服务名和凭据名的进程也可能读取它。
+> 导入 MetaSo 上名称为“Codex个人”的现有 API Key。
 
-成功后按 `⌘Q` 完全退出 Codex，重新打开并新建任务。钥匙串内容可以跨 Codex 重启、注销和 Mac 重启保留，无需再次导入。
+程序只接受唯一且完全匹配的名称；不会重新生成或删除网站上的 Key。若创建提交后连接中断，请先检查网站是否已有该名称，再选择导入，避免重复创建。
 
-整理、切换、检查或撤销：
+终端方式需在插件目录内执行：
 
 ```bash
-./scripts/import-metaso-key.command --list
-./scripts/import-metaso-key.command --use work
-./scripts/import-metaso-key.command --status
-./scripts/import-metaso-key.command --clear work
+node scripts/auth.mjs
+node scripts/auth.mjs --name "Codex个人"
+node scripts/auth.mjs --import-existing --name "Codex个人"
+node scripts/auth.mjs --status
 ```
 
-`--list` 使用 `*` 标记当前选择，使用 `!` 标记元数据存在但钥匙串项目缺失或格式无效。切换后必须完全重启 Codex，新的 MCP 进程才会读取所选 Key。
+上面前三条是三种可选连接方式，无需依次执行。已有本地凭据时，程序会要求明确替换；需要替换时，在选定的连接命令末尾加 `--replace`。这只替换本地凭据，不会撤销网站上的旧 Key。
 
-为避免一次输错就覆盖原有有效凭据，导入脚本不会原地覆盖同名有效 Key。需要轮换时，先用新名称导入并以 `--use` 切换，验证成功后再用 `--clear` 删除旧名称。0.2 仍可读取此前以旧服务命名空间保存且已被选择的同名凭据；清除时会同时处理新旧服务命名空间，但不会再自动启用未命名的旧版 `METASO_API_KEY` 钥匙串项目。
+如果浏览器环境不可用，可在网站复制 Key，再从剪贴板直接传入标准输入；Key 不出现在命令参数中：
 
-导入成功后，脚本会清除旧版方法留下的 `launchctl` 会话变量。如果你以前把 `METASO_API_KEY` 写入了 `[shell_environment_policy.set]`，也应删除该行，避免在 `config.toml` 中保留无效的明文副本。
+macOS：
 
-### 方法 B：显示在 “Servers” 且右侧有齿轮
+```bash
+pbpaste | node scripts/auth.mjs --stdin --name "Codex个人"
+```
 
-这是独立 MCP 或混合安装方式，可以将变量限定给这个 MCP Server：
+Windows PowerShell：
 
-1. 点击 `metaso-search-neo` 右侧的齿轮。
-2. 在 **Environment variables** 中添加：
-   - Key：`METASO_API_KEY`
-   - Value：你的 MetaSo API Key
-3. 点击 **Save**。
-4. 关闭并重新打开 Codex，然后新建一个任务。
+```powershell
+Get-Clipboard -Raw | node scripts/auth.mjs --stdin --name "Codex个人"
+```
 
-不要把 Key 填入 **Environment variable passthrough**。该区域只接收变量名，并要求 Key 已经存在于 Codex 宿主进程的环境中。
+Linux 和更多说明见 [手动导入](docs/auth.md#manual-import)。完成后清空剪贴板。不要使用把真实 Key 写入命令中的 `echo` 或 `--key` 形式。
 
-## 3. 验证配置
+## 3. 保存位置与首次验证
 
-在新任务中输入：
+默认文件是 `~/.codex/state/metaso-search-neo/credentials/credential.json`；实际路径会出现在连接状态中。它是受当前用户文件权限保护的**明文文件**，不是加密保险库。请不要把该目录放入 Git、插件安装目录或共享/同步文件夹。路径覆盖规则见 [认证说明](docs/auth.md#credential-storage)。
+
+保存成功后，运行中的 MCP 会在下一次调用读取新 Key，无需因为更换这个文件而重启。环境变量 `METASO_API_KEY` 的优先级更高；如果状态提示环境变量覆盖文件，请检查 MCP 的环境配置。
+
+在聊天中执行一次小型验证：
 
 > 使用 MetaSo 搜索“MetaSo Search Neo”，返回三条来源链接。
 
-首次成功的研究调用会在正常结果中附带一次 **前沿研究模式（Research Frontier）** 提示。这表示插件、MCP Server 和 API Key 已正常工作。
+“已保存”只代表本地配置完成；成功的 API 请求才能确认 Key 当前可用。
 
-## 4. 常见问题
+## 4. 原有配置与问题处理
 
-### 提示缺少 `METASO_API_KEY`
+已经使用 `METASO_API_KEY` 或 macOS 钥匙串的用户可以继续使用。读取顺序为环境变量 → 插件凭据文件 → 已选择的旧版钥匙串凭据。新连接不会删除或自动迁移钥匙串内容。macOS 的 `./scripts/import-metaso-key.command` 仍是可选的旧版方式。
 
-使用方法 A 时，先运行 `./scripts/import-metaso-key.command --status`。如果未选择、钥匙串项目缺失或格式无效，运行 `--list` 检查，再用 `--use 名称` 切换或重新运行无参数脚本导入；成功后按 `⌘Q` 完全退出 Codex，重新打开并新建任务。不要改用 `[shell_environment_policy.set]`。
+- **缺少 Key**：重新运行连接或导入，检查 `metaso_auth_status`。
+- **401 / 2005**：MetaSo 拒绝了当前 Key；检查是否撤销、是否复制完整，以及环境变量是否覆盖新文件。
+- **创建结果不明确**：到网站检查指定名称，再以导入模式恢复；程序不会自动重发创建请求。
+- **权限错误**：凭据目录或文件权限不符合要求，程序会停止；不要把权限改为所有人可读。
+- **无法打开浏览器**：在有桌面的电脑运行连接命令，或使用标准输入/环境变量配置；远程无桌面主机不能完成可视登录。
+- **工具重复出现**：只保留插件内置 MCP 或独立 MCP 中的一种。
 
-### 返回 2005 或 401
+插件市场里的 `ON_INSTALL` 不会自动运行这个本地连接程序；请主动调用 MetaSo Auth。也不要依赖 `[shell_environment_policy.set]` 向插件内置 MCP 传递 Key。
 
-MetaSo 拒绝了当前凭据。检查 Key 是否完整、是否已撤销，以及它是否具备对应 API 的访问权限。
-
-### 同时出现两组 MetaSo 工具
-
-不要同时启用插件内置 MCP 和独立 MCP；保留其中一种，避免重复注册相同工具。
-
-### 更换或撤销 Key
-
-方法 A：运行 `./scripts/import-metaso-key.command --clear 名称` 删除指定 Key；省略名称时删除当前选择。轮换 Key 时请导入一个新名称、切换并验证，再清除旧名称；脚本不会覆盖仍然有效的同名 Key。方法 B：在 MCP 设置中替换或删除变量。之后重启 Codex。不要将旧 Key 留在测试脚本、终端历史、日志或截图中。
+自动创建使用 MetaSo 网站内部接口，网站更新后可能需要同步调整；它不是 MetaSo 官方 OAuth 或稳定的公开 Key 管理 API。依据与具体请求见 [认证说明](docs/auth.md#website-request-contract-and-evidence)。
