@@ -153,23 +153,20 @@ test("Windows applies SID-restricted ACLs before writing any credential bytes", 
   });
   const calls = [];
   const spawnSync = (command, args, options) => {
-    calls.push({ command, args });
+    calls.push({ command, args, kind: options.env?.METASO_ACL_FRESH_KIND });
     assert.equal(JSON.stringify(args).includes(key), false);
     if (command === "whoami.exe") return { status: 0, stdout: '"user","S-1-5-21-111-222-333-1001"' };
-    if (command === "icacls.exe") {
-      if (args.includes("/setowner")) {
-        assert.equal(args[2], "*S-1-5-21-111-222-333-1001");
-        return { status: 0 };
-      }
-      assert.equal(args.includes("/inheritance:r"), true);
-      assert.ok(args.some((argument) => argument.startsWith("*S-1-5-21-111-222-333-1001:")));
-      if (args[0].endsWith(".tmp")) assert.equal(readFileSync(args[0], "utf8"), "");
-      return { status: 0 };
-    }
     assert.equal(command, "powershell.exe");
     assert.equal(Object.keys(options.env).some((name) => /^PSModulePath$/i.test(name)), false);
     assert.equal(options.env.METASO_ACL_SID, "S-1-5-21-111-222-333-1001");
     assert.ok(Array.isArray(JSON.parse(options.env.METASO_ACL_TARGETS)));
+    if (options.env.METASO_ACL_FRESH_KIND) {
+      assert.ok(args.includes("-EncodedCommand"));
+      const target = options.env.METASO_ACL_TARGET;
+      if (options.env.METASO_ACL_FRESH_KIND === "directory") assert.deepEqual(readdirSync(target), []);
+      else assert.equal(readFileSync(target, "utf8"), "");
+      return { status: 0, stdout: "applied" };
+    }
     return { status: 0, stdout: "private\r\n" };
   };
   const { store } = fixture(t, { platform: "win32", spawnSync });
@@ -177,8 +174,19 @@ test("Windows applies SID-restricted ACLs before writing any credential bytes", 
   const beforeRead = calls.length;
   assert.equal(store.read().key, key);
   assert.equal(calls.slice(beforeRead).filter(({ command }) => command === "powershell.exe").length, 1);
-  assert.ok(calls.some(({ command }) => command === "icacls.exe"));
-  assert.ok(calls.some(({ args }) => args.includes("/setowner")));
+  assert.deepEqual(calls.filter(({ kind }) => kind).map(({ kind }) => kind), ["directory", "file"]);
+});
+
+test("Windows never resets ACLs on a pre-existing directory", (t) => {
+  const { directory } = fixture(t);
+  mkdirSync(directory, { mode: 0o700 });
+  const store = new CredentialStore({ directory, platform: "win32", spawnSync: (command, _args, options) => {
+    if (command === "whoami.exe") return { status: 0, stdout: '"user","S-1-5-21-111-222-333-1001"' };
+    assert.equal(options.env.METASO_ACL_FRESH_KIND, undefined, "Existing directories must only be inspected.");
+    return { status: 1 };
+  } });
+  assert.throws(() => store.ensureDirectory(), (error) => error.code === "UNSAFE_CREDENTIAL_STORAGE");
+  assert.deepEqual(readdirSync(directory), []);
 });
 
 test("Windows fails closed if private ACL enforcement is unavailable", (t) => {
@@ -203,6 +211,26 @@ test("native Windows rejects an additional Everyone-read ACE without replacing t
   assert.throws(() => store.read(), (error) => error.code === "UNSAFE_CREDENTIAL_STORAGE");
   assert.throws(() => store.write({ key: nextKey, name: "Replacement", replace: true }), (error) => error.code === "UNSAFE_CREDENTIAL_STORAGE");
   assert.equal(readFileSync(store.path).equals(before), true, "Unsafe credentials must not be overwritten.");
+});
+
+test("native Windows removes explicit default ACEs only on fresh empty objects", { skip: process.platform !== "win32" }, (t) => {
+  let injected = 0;
+  const { store } = fixture(t, { spawnSync: (command, args, options) => {
+    if (command === "powershell.exe" && options.env?.METASO_ACL_FRESH_KIND) {
+      const target = options.env.METASO_ACL_TARGET;
+      if (options.env.METASO_ACL_FRESH_KIND === "directory") assert.deepEqual(readdirSync(target), []);
+      else assert.equal(statSync(target).size, 0);
+      const added = nativeSpawnSync("icacls.exe", [target, "/grant", "*S-1-1-0:R"], {
+        encoding: "utf8", windowsHide: true, timeout: 10_000, stdio: "ignore",
+      });
+      assert.equal(added.status, 0, "The native fixture must add an explicit default ACE before initialization.");
+      injected++;
+    }
+    return nativeSpawnSync(command, args, options);
+  } });
+  store.write({ key, name: "Private defaults" });
+  assert.equal(injected, 2);
+  assert.equal(store.read().key === key, true);
 });
 
 test("native Windows creates a private empty directory with verifiable ACLs", { skip: process.platform !== "win32" }, (t) => {

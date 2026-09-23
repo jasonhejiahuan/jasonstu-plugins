@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import {
   closeSync, constants, fstatSync, fsyncSync, linkSync, lstatSync, mkdirSync,
-  openSync, readFileSync, renameSync, rmdirSync, unlinkSync, writeFileSync,
+  openSync, readFileSync, readdirSync, renameSync, rmdirSync, unlinkSync, writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -66,6 +66,12 @@ function assertNoSymlinkPath(path) {
   }
 }
 
+function windowsPowerShellEnvironment(extra = {}) {
+  // Windows PowerShell must rebuild module paths when its parent was PowerShell 7.
+  const environment = Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toUpperCase() !== "PSMODULEPATH"));
+  return { ...environment, ...extra };
+}
+
 /** Plaintext credentials in a private, persistent directory outside the plugin bundle. */
 export class CredentialStore {
   constructor(options = {}) {
@@ -95,9 +101,6 @@ export class CredentialStore {
 
   verifyWindowsAcl(paths) {
     const sid = this.windowsSid();
-    // A Node child of PowerShell 7 inherits incompatible PS7 module paths.
-    // Let Windows PowerShell rebuild its own defaults; never relax the ACL check.
-    const environment = Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toUpperCase() !== "PSMODULEPATH"));
     // Only metadata is returned. Neither the path nor a credential is interpolated into code.
     const script = "$ErrorActionPreference='Stop'; $paths=ConvertFrom-Json -InputObject $env:METASO_ACL_TARGETS; " +
       "$s=[System.Security.Principal.SecurityIdentifier]::new($env:METASO_ACL_SID); " +
@@ -109,7 +112,7 @@ export class CredentialStore {
     const result = this.spawnSync("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script], {
       encoding: "utf8", windowsHide: true, timeout: 10_000,
       stdio: ["ignore", "pipe", "ignore"],
-      env: { ...environment, METASO_ACL_TARGETS: JSON.stringify(Array.isArray(paths) ? paths : [paths]), METASO_ACL_SID: sid },
+      env: windowsPowerShellEnvironment({ METASO_ACL_TARGETS: JSON.stringify(Array.isArray(paths) ? paths : [paths]), METASO_ACL_SID: sid }),
     });
     if (result.error || result.status !== 0 || String(result.stdout ?? "").trim() !== "private") {
       fail("Credential storage must be owned by and accessible only to the current Windows account.", "UNSAFE_CREDENTIAL_STORAGE");
@@ -118,17 +121,40 @@ export class CredentialStore {
 
   applyWindowsAcl(path, directory) {
     const sid = this.windowsSid();
-    // Elevated Windows sessions can create files owned by Administrators by default.
-    const ownerResult = this.spawnSync("icacls.exe", [path, "/setowner", `*${sid}`], {
-      encoding: "utf8", windowsHide: true, timeout: 10_000, stdio: "ignore",
-    });
-    if (ownerResult.error || ownerResult.status !== 0) {
-      fail("Current-user ownership could not be established for Windows credential storage.", "UNSAFE_CREDENTIAL_STORAGE");
+    // Callers reach this only after their own successful mkdir or exclusive open.
+    // Never repair permissions on an existing user directory or credential file.
+    const metadata = statIfPresent(path);
+    if (!metadata || metadata.isSymbolicLink() || (directory
+      ? !metadata.isDirectory() || readdirSync(path).length !== 0
+      : !metadata.isFile() || metadata.nlink !== 1 || metadata.size !== 0)) {
+      fail("Private Windows permissions may only be initialized on a new empty storage object.", "UNSAFE_CREDENTIAL_STORAGE");
     }
-    const result = this.spawnSync("icacls.exe", [
-      path, "/inheritance:r", "/grant:r", `*${sid}:${directory ? "(OI)(CI)" : ""}F`,
-    ], { encoding: "utf8", windowsHide: true, timeout: 10_000, stdio: "ignore" });
-    if (result.error || result.status !== 0) {
+    // /inheritance:r does not remove explicit defaults (for example elevated
+    // runner Administrators/SYSTEM ACEs). A new security descriptor gives this
+    // fresh object exactly one current-user ACE without inheriting those grants.
+    const script = "$ErrorActionPreference='Stop'; $p=$env:METASO_ACL_TARGET; " +
+      "$s=[System.Security.Principal.SecurityIdentifier]::new($env:METASO_ACL_SID); " +
+      "$rights=[System.Security.AccessControl.FileSystemRights]::FullControl; " +
+      "$allow=[System.Security.AccessControl.AccessControlType]::Allow; " +
+      "if($env:METASO_ACL_FRESH_KIND -eq 'directory'){ " +
+      "$a=[System.Security.AccessControl.DirectorySecurity]::new(); " +
+      "$inherit=[System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit; " +
+      "$rule=[System.Security.AccessControl.FileSystemAccessRule]::new($s,$rights,$inherit,[System.Security.AccessControl.PropagationFlags]::None,$allow) " +
+      "}else{ $a=[System.Security.AccessControl.FileSecurity]::new(); " +
+      "$rule=[System.Security.AccessControl.FileSystemAccessRule]::new($s,$rights,$allow) }; " +
+      "$a.SetAccessRuleProtection($true,$false); $a.SetOwner($s); $a.AddAccessRule($rule); " +
+      "if($env:METASO_ACL_FRESH_KIND -eq 'directory'){[System.IO.Directory]::SetAccessControl($p,$a)}else{[System.IO.File]::SetAccessControl($p,$a)}; " +
+      "[Console]::Out.Write('applied')";
+    const result = this.spawnSync("powershell.exe", [
+      "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64"),
+    ], {
+      encoding: "utf8", windowsHide: true, timeout: 10_000, stdio: ["ignore", "pipe", "ignore"],
+      env: windowsPowerShellEnvironment({
+        METASO_ACL_TARGET: path, METASO_ACL_TARGETS: JSON.stringify([path]),
+        METASO_ACL_SID: sid, METASO_ACL_FRESH_KIND: directory ? "directory" : "file",
+      }),
+    });
+    if (result.error || result.status !== 0 || String(result.stdout ?? "").trim() !== "applied") {
       fail("Private Windows credential permissions could not be applied.", "UNSAFE_CREDENTIAL_STORAGE");
     }
     this.verifyWindowsAcl(path);
