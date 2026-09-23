@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync as nativeSpawnSync } from "node:child_process";
 import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -181,4 +181,65 @@ test("Windows fails closed if private ACL enforcement is unavailable", (t) => {
   });
   assert.throws(() => store.write({ key, name: "test" }), (error) => error.code === "UNSAFE_CREDENTIAL_STORAGE");
   assert.equal(existsSync(store.path), false);
+});
+
+test("native Windows creates a private empty directory with verifiable ACLs", { skip: process.platform !== "win32" }, (t) => {
+  let verification;
+  const safeCode = (value) => typeof value === "string" && /^[A-Za-z0-9_.,-]{1,240}$/.test(value) &&
+    !/S-\d+(?:-\d+)+/.test(value) ? value : undefined;
+  const transportMetadata = (result) => ({
+    status: Number.isInteger(result.status) ? result.status : null,
+    signal: safeCode(result.signal) ?? null,
+    errorCode: safeCode(result.error?.code) ?? null,
+  });
+  const spawnSync = (command, args, options) => {
+    const result = nativeSpawnSync(command, args, options);
+    if (command === "powershell.exe") verification = { result, options };
+    return result;
+  };
+  const { store } = fixture(t, { spawnSync });
+  let failure;
+  try { store.ensureDirectory(); } catch (error) { failure = error; }
+  if (!failure) {
+    assert.equal(existsSync(store.path), false);
+    return;
+  }
+
+  // This fixture never contains a Key. Keep diagnostic output limited to ACL
+  // booleans/flags and sanitized error identifiers, not names, paths or SIDs.
+  const script = [
+    "$ErrorActionPreference='Stop'",
+    "function Safe-Error($e) { $type=$e.Exception.GetType().FullName; $id=[string]$e.FullyQualifiedErrorId; if($type -notmatch '^[A-Za-z0-9_.]{1,160}$'){$type='unclassified'}; if($id -notmatch '^[A-Za-z0-9_.,-]{1,240}$' -or $id -match 'S-\\d+(?:-\\d+)+'){$id='unclassified'}; return @{errorType=$type; fullyQualifiedErrorId=$id} }",
+    "try { $paths=ConvertFrom-Json -InputObject $env:METASO_ACL_TARGETS; $sid=[System.Security.Principal.SecurityIdentifier]::new($env:METASO_ACL_SID); $checks=@(foreach($p in $paths){try{$a=Get-Acl -LiteralPath $p; $rules=@($a.GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier])); @{ownerMatches=($a.GetOwner([System.Security.Principal.SecurityIdentifier]).Value -eq $sid.Value); protected=[bool]$a.AreAccessRulesProtected; ruleCount=$rules.Count; rules=@(foreach($r in $rules){@{isCurrentSid=($r.IdentityReference.Value -eq $sid.Value); isInherited=[bool]$r.IsInherited; isAllow=($r.AccessControlType -eq 'Allow'); rights=[int]$r.FileSystemRights; inheritanceFlags=[int]$r.InheritanceFlags; propagationFlags=[int]$r.PropagationFlags}})}}catch{Safe-Error $_}}); @{checks=$checks}|ConvertTo-Json -Compress -Depth 6 } catch { Safe-Error $_ | ConvertTo-Json -Compress }",
+  ].join("; ");
+  let inspection = { available: false };
+  if (verification) {
+    const result = nativeSpawnSync("powershell.exe", [
+      "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64"),
+    ], { ...verification.options, stdio: ["ignore", "pipe", "ignore"] });
+    inspection = { available: true, ...transportMetadata(result) };
+    try {
+      const parsed = JSON.parse(result.stdout);
+      const errorFields = (value) => ({ errorType: safeCode(value?.errorType), fullyQualifiedErrorId: safeCode(value?.fullyQualifiedErrorId) });
+      const ruleFields = (rule) => ({
+        isCurrentSid: rule?.isCurrentSid === true, isInherited: rule?.isInherited === true, isAllow: rule?.isAllow === true,
+        rights: Number.isInteger(rule?.rights) ? rule.rights : null,
+        inheritanceFlags: Number.isInteger(rule?.inheritanceFlags) ? rule.inheritanceFlags : null,
+        propagationFlags: Number.isInteger(rule?.propagationFlags) ? rule.propagationFlags : null,
+      });
+      inspection = {
+        ...inspection, ...errorFields(parsed),
+        checks: Array.isArray(parsed.checks) ? parsed.checks.map((check) => ({
+          ...errorFields(check), ownerMatches: check.ownerMatches === true, protected: check.protected === true,
+          ruleCount: Number.isInteger(check.ruleCount) ? check.ruleCount : null,
+          rules: Array.isArray(check.rules) ? check.rules.map(ruleFields) : [],
+        })) : [],
+      };
+    } catch { inspection.outputParsed = false; }
+  }
+  assert.fail(JSON.stringify({
+    failureCode: safeCode(failure.code) ?? "UNKNOWN",
+    verification: verification ? transportMetadata(verification.result) : null,
+    inspection,
+  }));
 });
