@@ -13,7 +13,9 @@ function fixture(t, options = {}) {
   const root = mkdtempSync(join(tmpdir(), "metaso-credentials-test-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const directory = join(root, "private");
-  return { root, directory, store: new CredentialStore({ directory, ...options }) };
+  const nativeRuntime = process.platform === "win32" && process.env.METASO_TEST_POWERSHELL_PATH
+    ? { powershellCandidates: [process.env.METASO_TEST_POWERSHELL_PATH] } : {};
+  return { root, directory, store: new CredentialStore({ directory, ...nativeRuntime, ...options }) };
 }
 
 test("credential storage paths have explicit, stable precedence", (t) => {
@@ -70,7 +72,7 @@ test("concurrent first writes produce one complete credential without clobbering
   store.ensureDirectory();
   const moduleUrl = new URL("../mcp/credentials.mjs", import.meta.url).href;
   const code = `import { CredentialStore } from ${JSON.stringify(moduleUrl)};
-    try { new CredentialStore({directory:process.argv[1]}).write({key:${JSON.stringify(key)},name:process.argv[2]}); process.stdout.write('written'); }
+    try { new CredentialStore({directory:process.argv[1], ...(process.env.METASO_TEST_POWERSHELL_PATH ? {powershellCandidates:[process.env.METASO_TEST_POWERSHELL_PATH]} : {})}).write({key:${JSON.stringify(key)},name:process.argv[2]}); process.stdout.write('written'); }
     catch(e) { process.stdout.write(e.code); }`;
   const run = (name) => new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ["--input-type=module", "-e", code, directory, name], { stdio: ["ignore", "pipe", "pipe"] });
@@ -158,6 +160,8 @@ test("Windows applies SID-restricted ACLs before writing any credential bytes", 
     if (command === "whoami.exe") return { status: 0, stdout: '"user","S-1-5-21-111-222-333-1001"' };
     assert.equal(command, "powershell.exe");
     assert.equal(Object.keys(options.env).some((name) => /^PSModulePath$/i.test(name)), false);
+    assert.equal(Object.keys(options.env).some((name) => /^METASO_API_KEY$/i.test(name)), false);
+    if (!options.env.METASO_ACL_TARGETS) return { status: 0, stdout: "metaso-acl-runtime-v1" };
     assert.equal(options.env.METASO_ACL_SID, "S-1-5-21-111-222-333-1001");
     assert.ok(Array.isArray(JSON.parse(options.env.METASO_ACL_TARGETS)));
     if (options.env.METASO_ACL_FRESH_KIND) {
@@ -169,7 +173,7 @@ test("Windows applies SID-restricted ACLs before writing any credential bytes", 
     }
     return { status: 0, stdout: "private\r\n" };
   };
-  const { store } = fixture(t, { platform: "win32", spawnSync });
+  const { store } = fixture(t, { platform: "win32", spawnSync, powershellCandidates: ["powershell.exe"] });
   store.write({ key, name: "Windows fixture" });
   const beforeRead = calls.length;
   assert.equal(store.read().key, key);
@@ -180,9 +184,10 @@ test("Windows applies SID-restricted ACLs before writing any credential bytes", 
 test("Windows never resets ACLs on a pre-existing directory", (t) => {
   const { directory } = fixture(t);
   mkdirSync(directory, { mode: 0o700 });
-  const store = new CredentialStore({ directory, platform: "win32", spawnSync: (command, _args, options) => {
+  const store = new CredentialStore({ directory, platform: "win32", powershellCandidates: ["powershell.exe"], spawnSync: (command, _args, options) => {
     if (command === "whoami.exe") return { status: 0, stdout: '"user","S-1-5-21-111-222-333-1001"' };
     assert.equal(options.env.METASO_ACL_FRESH_KIND, undefined, "Existing directories must only be inspected.");
+    if (!options.env.METASO_ACL_TARGETS) return { status: 0, stdout: "metaso-acl-runtime-v1" };
     return { status: 1 };
   } });
   assert.throws(() => store.ensureDirectory(), (error) => error.code === "UNSAFE_CREDENTIAL_STORAGE");
@@ -192,13 +197,81 @@ test("Windows never resets ACLs on a pre-existing directory", (t) => {
 test("Windows fails closed if private ACL enforcement is unavailable", (t) => {
   const { store } = fixture(t, {
     platform: "win32",
-    spawnSync: (command) => command === "whoami.exe"
+    powershellCandidates: ["powershell.exe"],
+    spawnSync: (command, _args, options) => command === "whoami.exe"
       ? { status: 0, stdout: '"user","S-1-5-21-111-222-333-1001"' }
-      : { status: 1 },
+      : !options.env.METASO_ACL_TARGETS ? { status: 0, stdout: "metaso-acl-runtime-v1" } : { status: 1 },
   });
   assert.throws(() => store.write({ key, name: "test" }), (error) => error.code === "UNSAFE_CREDENTIAL_STORAGE");
   assert.equal(existsSync(store.path), false);
 });
+
+test("Windows selects PowerShell 7 once and caches the successful probe", (t) => {
+  const commands = [];
+  const { store } = fixture(t, { platform: "win32", powershellCandidates: ["pwsh.exe", "powershell.exe"],
+    spawnSync: (command, args, options) => {
+      commands.push(command);
+      assert.ok(args.includes("-EncodedCommand"));
+      assert.equal(options.env.METASO_ACL_FRESH_KIND, undefined);
+      assert.equal(options.env.METASO_API_KEY, undefined);
+      return { status: 0, stdout: "metaso-acl-runtime-v1" };
+    },
+  });
+  assert.equal(store.windowsPowerShell(), "pwsh.exe");
+  assert.equal(store.windowsPowerShell(), "pwsh.exe");
+  assert.deepEqual(commands, ["pwsh.exe"]);
+});
+
+for (const unavailable of ["missing", "empty output"]) {
+  test(`Windows runtime selection falls back only after a ${unavailable} read-only probe`, (t) => {
+    const commands = [];
+    const { store } = fixture(t, { platform: "win32", powershellCandidates: ["pwsh.exe", "powershell.exe"],
+      spawnSync: (command, _args, options) => {
+        commands.push(command);
+        assert.equal(options.env.METASO_ACL_FRESH_KIND, undefined);
+        if (command === "pwsh.exe") return unavailable === "missing"
+          ? { status: null, error: { code: "ENOENT" } } : { status: 0, stdout: "" };
+        return { status: 0, stdout: "metaso-acl-runtime-v1" };
+      },
+    });
+    assert.equal(store.windowsPowerShell(), "powershell.exe");
+    assert.deepEqual(commands, ["pwsh.exe", "powershell.exe"]);
+    assert.equal(existsSync(store.path), false);
+  });
+}
+
+test("Windows refuses credential writes when no runtime passes the nonsecret probe", (t) => {
+  const commands = [];
+  const { store } = fixture(t, { platform: "win32", powershellCandidates: ["pwsh.exe", "powershell.exe"],
+    spawnSync: (command, _args, options) => {
+      if (command === "whoami.exe") return { status: 0, stdout: '"user","S-1-5-21-111-222-333-1001"' };
+      commands.push(command);
+      assert.equal(options.env.METASO_ACL_FRESH_KIND, undefined, "No ACL mutation may run after failed probes.");
+      return { status: 0, stdout: "" };
+    },
+  });
+  assert.throws(() => store.write({ key, name: "No runtime" }), (error) => error.code === "CREDENTIAL_STORE_UNAVAILABLE");
+  assert.deepEqual(commands, ["pwsh.exe", "powershell.exe"]);
+  assert.equal(existsSync(store.path), false);
+});
+
+for (const stage of ["apply", "verify"]) {
+  test(`Windows never switches runtime after an ACL ${stage} failure`, (t) => {
+    const commands = [];
+    const { store, directory } = fixture(t, { platform: "win32", powershellCandidates: ["pwsh.exe", "powershell.exe"],
+      spawnSync: (command, _args, options) => {
+        if (command === "whoami.exe") return { status: 0, stdout: '"user","S-1-5-21-111-222-333-1001"' };
+        commands.push(command);
+        if (!options.env.METASO_ACL_TARGETS) return { status: 0, stdout: "metaso-acl-runtime-v1" };
+        return { status: 1 };
+      },
+    });
+    if (stage === "verify") mkdirSync(directory, { mode: 0o700 });
+    assert.throws(() => store.write({ key, name: "Failure" }), (error) => error.code === "UNSAFE_CREDENTIAL_STORAGE");
+    assert.deepEqual(commands, ["pwsh.exe", "pwsh.exe"]);
+    assert.equal(existsSync(store.path), false);
+  });
+}
 
 test("native Windows rejects an additional Everyone-read ACE without replacing the credential", { skip: process.platform !== "win32" }, (t) => {
   const { store } = fixture(t);
@@ -216,7 +289,7 @@ test("native Windows rejects an additional Everyone-read ACE without replacing t
 test("native Windows removes explicit default ACEs only on fresh empty objects", { skip: process.platform !== "win32" }, (t) => {
   let injected = 0;
   const { store } = fixture(t, { spawnSync: (command, args, options) => {
-    if (command === "powershell.exe" && options.env?.METASO_ACL_FRESH_KIND) {
+    if (options.env?.METASO_ACL_FRESH_KIND) {
       const target = options.env.METASO_ACL_TARGET;
       if (options.env.METASO_ACL_FRESH_KIND === "directory") assert.deepEqual(readdirSync(target), []);
       else assert.equal(statSync(target).size, 0);
@@ -244,7 +317,7 @@ test("native Windows creates a private empty directory with verifiable ACLs", { 
   });
   const spawnSync = (command, args, options) => {
     const result = nativeSpawnSync(command, args, options);
-    if (command === "powershell.exe") verification = { result, options };
+    if (options.env?.METASO_ACL_TARGETS) verification = { command, result, options };
     return result;
   };
   const { store } = fixture(t, { spawnSync });
@@ -264,7 +337,7 @@ test("native Windows creates a private empty directory with verifiable ACLs", { 
   ].join("; ");
   let inspection = { available: false };
   if (verification) {
-    const result = nativeSpawnSync("powershell.exe", [
+    const result = nativeSpawnSync(verification.command, [
       "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64"),
     ], { ...verification.options, stdio: ["ignore", "pipe", "ignore"] });
     inspection = { available: true, ...transportMetadata(result) };

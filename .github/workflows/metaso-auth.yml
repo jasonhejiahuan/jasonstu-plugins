@@ -31,6 +31,13 @@ jobs:
           node-version: "20"
       - run: npm run check
       - run: node --test tests/credentials.test.mjs tests/auth-contract.test.mjs tests/auth.test.mjs tests/client.test.mjs tests/settings-tools.test.mjs
+      - name: Check Windows PowerShell 5 fallback separately
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:METASO_TEST_POWERSHELL_PATH = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+          node --test tests/credentials.test.mjs
+          exit $LASTEXITCODE
       - run: npm run smoke
   browser:
     runs-on: ubuntu-latest

@@ -67,9 +67,22 @@ function assertNoSymlinkPath(path) {
 }
 
 function windowsPowerShellEnvironment(extra = {}) {
-  // Windows PowerShell must rebuild module paths when its parent was PowerShell 7.
-  const environment = Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toUpperCase() !== "PSMODULEPATH"));
+  // Rebuild the selected engine's own module paths. ACL helpers need no API Key.
+  const environment = Object.fromEntries(Object.entries(process.env).filter(([name]) =>
+    !["PSMODULEPATH", "METASO_API_KEY"].includes(name.toUpperCase())));
   return { ...environment, ...extra };
+}
+
+function windowsPowerShellCandidates() {
+  const value = (name) => Object.entries(process.env).find(([key]) => key.toUpperCase() === name)?.[1];
+  const programFiles = value("PROGRAMFILES");
+  const systemRoot = value("SYSTEMROOT");
+  return [...new Set([
+    ...(programFiles && isAbsolute(programFiles) ? [join(programFiles, "PowerShell", "7", "pwsh.exe")] : []),
+    "pwsh.exe",
+    ...(systemRoot && isAbsolute(systemRoot) ? [join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")] : []),
+    "powershell.exe",
+  ])];
 }
 
 /** Plaintext credentials in a private, persistent directory outside the plugin bundle. */
@@ -82,6 +95,8 @@ export class CredentialStore {
       : absoluteDirectory(options.directory);
     this.path = join(this.directory, "credential.json");
     this.spawnSync = options.spawnSync ?? spawnSync;
+    // Constructor injection is for native tests; no runtime-selection env option.
+    this.powershellCandidates = options.powershellCandidates ?? windowsPowerShellCandidates();
     this.uid = typeof process.getuid === "function" ? process.getuid() : undefined;
   }
 
@@ -99,6 +114,27 @@ export class CredentialStore {
     return sid;
   }
 
+  windowsPowerShell() {
+    if (this.powershellPath) return this.powershellPath;
+    const script = "$ErrorActionPreference='Stop'; if($PSVersionTable.PSVersion.Major -lt 5){exit 1}; " +
+      "Import-Module Microsoft.PowerShell.Security -ErrorAction Stop; " +
+      "$null=Get-Command -Name Get-Acl,Set-Acl -CommandType Cmdlet -ErrorAction Stop; " +
+      "[Console]::Out.Write('metaso-acl-runtime-v1')";
+    for (const candidate of this.powershellCandidates) {
+      const result = this.spawnSync(candidate, [
+        "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64"),
+      ], {
+        encoding: "utf8", windowsHide: true, timeout: 10_000,
+        stdio: ["ignore", "pipe", "ignore"], env: windowsPowerShellEnvironment(),
+      });
+      if (!result.error && result.status === 0 && String(result.stdout ?? "").trim() === "metaso-acl-runtime-v1") {
+        this.powershellPath = candidate;
+        return candidate;
+      }
+    }
+    fail("No functional PowerShell ACL runtime is available. Install or enable PowerShell 7, then retry.");
+  }
+
   verifyWindowsAcl(paths) {
     const sid = this.windowsSid();
     // Only metadata is returned. Neither the path nor a credential is interpolated into code.
@@ -109,7 +145,7 @@ export class CredentialStore {
       "$rules=@($a.GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier])); " +
       "if($rules.Count -eq 0){$ok=$false}; foreach($r in $rules){if($r.IdentityReference.Value -ne $s.Value -or $r.AccessControlType -ne 'Allow'){$ok=$false}}; " +
       "if(-not $ok){exit 1}}; Write-Output 'private'";
-    const result = this.spawnSync("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script], {
+    const result = this.spawnSync(this.windowsPowerShell(), ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script], {
       encoding: "utf8", windowsHide: true, timeout: 10_000,
       stdio: ["ignore", "pipe", "ignore"],
       env: windowsPowerShellEnvironment({ METASO_ACL_TARGETS: JSON.stringify(Array.isArray(paths) ? paths : [paths]), METASO_ACL_SID: sid }),
@@ -143,9 +179,11 @@ export class CredentialStore {
       "}else{ $a=[System.Security.AccessControl.FileSecurity]::new(); " +
       "$rule=[System.Security.AccessControl.FileSystemAccessRule]::new($s,$rights,$allow) }; " +
       "$a.SetAccessRuleProtection($true,$false); $a.SetOwner($s); $a.AddAccessRule($rule); " +
-      "if($env:METASO_ACL_FRESH_KIND -eq 'directory'){[System.IO.Directory]::SetAccessControl($p,$a)}else{[System.IO.File]::SetAccessControl($p,$a)}; " +
+      "Set-Acl -LiteralPath $p -AclObject $a -ErrorAction Stop; " +
       "[Console]::Out.Write('applied')";
-    const result = this.spawnSync("powershell.exe", [
+    // Runtime fallback is confined to the read-only probe. Never retry an ACL
+    // mutation or failed verification in a different PowerShell executable.
+    const result = this.spawnSync(this.windowsPowerShell(), [
       "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64"),
     ], {
       encoding: "utf8", windowsHide: true, timeout: 10_000, stdio: ["ignore", "pipe", "ignore"],
