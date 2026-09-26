@@ -1,14 +1,15 @@
 {
   "name": "metaso-search-neo-codex-plugin",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "Dependency-free local MCP server for the MetaSo Search Neo Codex plugin.",
+  "description": "Local MetaSo MCP with optional browser-based API Key setup.",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "check": "node --check mcp/server.mjs && node --check mcp/metaso-client.mjs && node --check mcp/metaso-keychain.mjs && node --check mcp/deep-research.mjs && node --check mcp/settings.mjs && node --check mcp/schema.mjs && node --check mcp/tools.mjs && zsh -n scripts/import-metaso-key.command",
+    "check": "node --check mcp/server.mjs && node --check mcp/metaso-client.mjs && node --check mcp/metaso-keychain.mjs && node --check mcp/credentials.mjs && node --check mcp/auth-contract.mjs && node --check mcp/auth.mjs && node --check mcp/web-api-provision.mjs && node --check scripts/auth.mjs && node --check mcp/deep-research.mjs && node --check mcp/settings.mjs && node --check mcp/schema.mjs && node --check mcp/tools.mjs",
+    "auth": "node scripts/auth.mjs",
     "test": "node --test tests/*.test.mjs",
     "smoke": "node scripts/mcp-smoke.mjs"
   }

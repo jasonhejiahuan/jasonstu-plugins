@@ -1,0 +1,58 @@
+name: MetaSo connection checks
+
+on:
+  pull_request:
+    paths:
+      - "plugins/metaso-search-neo/**"
+      - ".github/workflows/metaso-auth.yml"
+  push:
+    branches: [main]
+    paths:
+      - "plugins/metaso-search-neo/**"
+      - ".github/workflows/metaso-auth.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: plugins/metaso-search-neo
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "20"
+      - run: npm run check
+      - run: node --test tests/credentials.test.mjs tests/auth-contract.test.mjs tests/auth.test.mjs tests/client.test.mjs tests/settings-tools.test.mjs
+      - name: Check Windows PowerShell 5 fallback separately
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:METASO_TEST_POWERSHELL_PATH = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+          node --test tests/credentials.test.mjs
+          exit $LASTEXITCODE
+      - run: npm run smoke
+  browser:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins/metaso-search-neo
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      - name: Install isolated browser test runtime
+        run: |
+          npm install --prefix "$RUNNER_TEMP/metaso-browser" --no-audit --no-fund --ignore-scripts --package-lock=false --no-save playwright@1.63.0
+          node "$RUNNER_TEMP/metaso-browser/node_modules/playwright/cli.js" install --with-deps chromium --no-shell
+          echo "METASO_TEST_PLAYWRIGHT_MODULE=$RUNNER_TEMP/metaso-browser/node_modules/playwright-core/index.mjs" >> "$GITHUB_ENV"
+          echo "METASO_TEST_CHROME_EXECUTABLE=$(node --input-type=module -e 'const m = await import(process.argv[1]); console.log(m.chromium.executablePath());' "$RUNNER_TEMP/metaso-browser/node_modules/playwright-core/index.mjs")" >> "$GITHUB_ENV"
+      - run: node --test tests/web-api-provision.test.mjs

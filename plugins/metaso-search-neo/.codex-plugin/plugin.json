@@ -1,6 +1,6 @@
 {
   "name": "metaso-search-neo",
-  "version": "0.2.0+codex.20260916075716",
+  "version": "0.3.0+codex.20260923021017",
   "description": "MetaSo search, Reader, cited answers, bounded deep research, and topic knowledge-base tools for Codex.",
   "author": {
     "name": "JASON Studio"

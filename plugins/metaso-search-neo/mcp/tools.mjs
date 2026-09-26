@@ -18,6 +18,33 @@ const MODEL_SCHEMA = {
 
 const TOOLS = [
   {
+    name: "metaso_auth_start",
+    description: "Connect MetaSo in an isolated browser: the user logs in, then create a uniquely named API Key or import an exact existing name into private plugin-local storage. First use installs pinned browser support. Call only when the user requests connection/setup. This is local setup, not Codex-native OAuth. Never accept or return an API Key in chat. Returns immediately; check metaso_auth_status.",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", minLength: 1, maxLength: 20, description: "MetaSo API Key display name (at most 20 characters), never the Key value. Required in import mode; generated uniquely in create mode." },
+        mode: { type: "string", enum: ["create", "import"], default: "create" },
+        replace: { type: "boolean", default: false, description: "Explicitly replace the locally saved credential. Does not revoke or regenerate a MetaSo Key." },
+        timeout_seconds: { type: "integer", minimum: 30, maximum: 900, default: 600 },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "metaso_auth_status",
+    description: "Read local MetaSo connection progress and credential metadata. Never returns Key values and makes no billable API call. configured means locally stored, not an online validity check.",
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "metaso_auth_cancel",
+    description: "Cancel this MCP process's active browser connection and close its isolated browser. Does not delete or revoke Keys; inspect the named Key if creation was already submitted.",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
     name: "metaso_capabilities",
     description:
       "Show MetaSo scopes, models, limits, compatibility rules, authentication state, and the plugin-wide Research Frontier setting. Does not call a billable API.",
@@ -456,6 +483,16 @@ export async function callTool(name, args, context) {
       });
     }
     validateToolArguments(tool, args ?? {});
+
+    if (name.startsWith("metaso_auth_")) {
+      if (!context.auth) throw new MetasoError("Connection manager unavailable.", { code: "AUTH_UNAVAILABLE", channel: "configuration" });
+      if (name === "metaso_auth_start") {
+        if (args?.mode === "import" && !args.name) throw new MetasoError("Import mode requires the exact Key name.", { code: "INVALID_KEY_NAME", channel: "validation" });
+        return toolResult(name, context.auth.start(args));
+      }
+      if (name === "metaso_auth_cancel") return toolResult(name, await context.auth.cancel());
+      return toolResult(name, context.auth.status());
+    }
 
     if (name === "metaso_capabilities") {
       const current = await settings.read();

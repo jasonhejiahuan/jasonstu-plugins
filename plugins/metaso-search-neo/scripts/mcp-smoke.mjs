@@ -14,6 +14,7 @@ const child = spawn(process.execPath, [join(pluginRoot, "mcp/server.mjs"), "--st
   env: {
     ...process.env,
     METASO_STATE_DIR: stateDirectory,
+    METASO_CREDENTIALS_DIR: join(stateDirectory, "credentials"),
     METASO_API_KEY: "",
     METASO_DISABLE_KEYCHAIN: "true",
   },
@@ -61,6 +62,7 @@ send({
   method: "tools/call",
   params: { name: "metaso_capabilities", arguments: {} },
 });
+send({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "metaso_auth_status", arguments: {} } });
 child.stdin.end();
 
 const exitCode = await new Promise((resolvePromise, reject) => {
@@ -79,12 +81,15 @@ try {
   const initialize = messages.find((message) => message.id === 1);
   const tools = messages.find((message) => message.id === 2);
   const capabilities = messages.find((message) => message.id === 3);
+  const authentication = messages.find((message) => message.id === 4);
   assert.equal(initialize.result.protocolVersion, "2025-06-18");
-  assert.equal(initialize.result.serverInfo.version, "0.2.0");
-  assert.equal(tools.result.tools.length, 17);
+  assert.equal(initialize.result.serverInfo.version, "0.3.0");
+  assert.equal(tools.result.tools.length, 20);
   assert.equal(capabilities.result.structuredContent.authenticated, false);
   assert.equal(capabilities.result.structuredContent.researchFrontier.enabled, false);
-  process.stdout.write("MCP smoke test passed: initialize, tools/list, and capabilities.\n");
+  assert.equal(authentication.result.structuredContent.credential.configured, false);
+  assert.equal(authentication.result.structuredContent.nativeOAuth, false);
+  process.stdout.write("MCP smoke test passed: initialize, tools/list, capabilities, and connection status.\n");
 } finally {
   await rm(stateDirectory, { recursive: true, force: true });
 }

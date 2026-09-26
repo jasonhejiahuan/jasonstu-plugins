@@ -15,3 +15,10 @@ secrets/
 *.key
 *.p12
 *.pfx
+credentials.json
+credential.json
+.credential-*.tmp
+.write-lock/
+.browser-auth-lock/
+browser-runtime/
+.playwright-cli/

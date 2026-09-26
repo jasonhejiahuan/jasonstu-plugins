@@ -6,10 +6,11 @@ import process from "node:process";
 import { MetasoClient, redactSecrets } from "./metaso-client.mjs";
 import { PluginSettings } from "./settings.mjs";
 import { callTool, listTools } from "./tools.mjs";
+import { AuthManager } from "./auth.mjs";
 
 const SERVER_INFO = {
   name: "metaso-search-neo",
-  version: "0.2.0",
+  version: "0.3.0",
 };
 const SUPPORTED_PROTOCOLS = new Set(["2025-06-18", "2025-03-26", "2024-11-05"]);
 
@@ -33,6 +34,7 @@ export function createContext(options = {}) {
   return {
     client: options.client ?? new MetasoClient(options.clientOptions),
     settings: options.settings ?? new PluginSettings(options.settingsOptions),
+    auth: options.auth ?? new AuthManager({ environment: options.clientOptions?.environment, ...options.authOptions }),
   };
 }
 
@@ -121,6 +123,7 @@ export async function runStdio(options = {}) {
     }
   });
   process.stdin.on("end", () => {
+    void context.auth?.cancel();
     if (buffer.trim()) {
       process.stdout.write(`${JSON.stringify(jsonRpcError(null, -32700, "Parse error"))}\n`);
     }

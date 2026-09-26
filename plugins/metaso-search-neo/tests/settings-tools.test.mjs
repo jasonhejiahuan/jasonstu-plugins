@@ -30,7 +30,7 @@ test("tool list exposes the complete stable surface", () => {
   ]) {
     assert.equal(names.has(required), true, `${required} should exist`);
   }
-  assert.equal(names.size, 17);
+  assert.equal(names.size, 20);
 });
 
 test("non-research mutations do not consume the first-answer Frontier notice", async () => {

@@ -51,15 +51,15 @@ test("HTTP 200 business errors are rejected", async () => {
   );
 });
 
-test("missing API Key points bundled macOS users to the verified importer", () => {
+test("missing API Key points users to the cross-platform connection flow", () => {
   const client = new MetasoClient({ apiKey: "" });
   assert.throws(
     () => client.requireApiKey(),
     (error) =>
       error instanceof MetasoError &&
       error.code === "MISSING_API_KEY" &&
-      error.message.includes("scripts/import-metaso-key.command") &&
-      error.message.includes("Login Keychain"),
+      error.message.includes("metaso_auth_start") &&
+      error.message.includes("node scripts/auth.mjs"),
   );
 });
 
@@ -67,11 +67,62 @@ test("client reports when credentials were loaded from macOS Keychain", () => {
   const key = `mk-${"x".repeat(32)}`;
   const client = new MetasoClient({
     environment: {},
+    credentialStore: { read: () => null },
     keychainLoader: () => ({ key, profile: "work" }),
   });
   assert.equal(client.apiKey, key);
   assert.equal(client.capabilities().credentialSource, "macos_keychain");
   assert.equal(client.capabilities().credentialProfile, "work");
+});
+
+test("explicit and environment keys take priority without accessing credential storage", () => {
+  const credentialStore = { read: () => assert.fail("storage must not be read") };
+  const explicit = new MetasoClient({ apiKey: "explicit", environment: { METASO_API_KEY: "env" }, credentialStore });
+  const environment = new MetasoClient({ environment: { METASO_API_KEY: "env" }, credentialStore });
+  assert.equal(explicit.apiKey, "explicit");
+  assert.equal(explicit.capabilities().credentialSource, "explicit");
+  assert.equal(environment.apiKey, "env");
+  assert.equal(environment.capabilities().credentialSource, "environment");
+});
+
+test("credentials connect and rotate without restarting the client", async () => {
+  let saved = null;
+  const headers = [];
+  const client = new MetasoClient({
+    environment: {},
+    credentialStore: { path: "/private/test/credential.json", read: () => saved },
+    keychainLoader: () => ({ key: "legacy-key", profile: "old" }),
+    fetchImpl: async (_url, options) => { headers.push(options.headers.Authorization); return response({}); },
+  });
+  assert.equal(client.capabilities().credentialSource, "macos_keychain");
+  saved = { key: `mk-${"a".repeat(32)}`, name: "new" };
+  const capabilities = client.capabilities();
+  assert.equal(capabilities.credentialSource, "plugin_file");
+  assert.equal(capabilities.credentialProfile, undefined);
+  assert.equal(capabilities.credentialStorage.name, "new");
+  assert.equal(JSON.stringify(capabilities).includes(saved.key), false);
+  await client.request("/test");
+  saved = { key: `mk-${"b".repeat(32)}`, name: "rotated" };
+  await client.request("/test");
+  assert.deepEqual(headers, [`Bearer mk-${"a".repeat(32)}`, `Bearer mk-${"b".repeat(32)}`]);
+});
+
+test("missing credentials reload and unsafe storage fails closed without leaking errors", () => {
+  let saved = null;
+  const client = new MetasoClient({
+    environment: {}, credentialStore: { read: () => saved }, keychainLoader: () => ({ key: "" }),
+  });
+  assert.equal(client.capabilities().authenticated, false);
+  saved = { key: `mk-${"a".repeat(32)}`, name: "connected" };
+  assert.equal(client.capabilities().authenticated, true);
+  const unsafe = new MetasoClient({
+    environment: {},
+    credentialStore: { read: () => { throw Object.assign(new Error(saved.key), { code: "UNSAFE_CREDENTIAL_STORAGE" }); } },
+    keychainLoader: () => assert.fail("unsafe file storage must not trigger fallback"),
+  });
+  assert.equal(unsafe.capabilities().authenticated, false);
+  assert.equal(JSON.stringify(unsafe.capabilities()).includes(saved.key), false);
+  assert.throws(() => unsafe.requireApiKey(), (error) => error.code === "UNSAFE_CREDENTIAL_STORAGE" && !error.message.includes(saved.key));
 });
 
 test("Reader sends format through the HTTP Accept header", async () => {
