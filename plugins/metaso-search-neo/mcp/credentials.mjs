@@ -1,3 +1,4 @@
+import { validateCredentialMetadata } from "./account-profile.mjs";
 import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import {
@@ -271,7 +272,8 @@ export class CredentialStore {
         typeof data.createdAt !== "string" || !Number.isFinite(Date.parse(data.createdAt))) {
         fail("The credential file is invalid. Run the MetaSo connection setup again.", "INVALID_CREDENTIAL");
       }
-      return { key: data.key, name: data.name, createdAt: data.createdAt };
+      const credentialMetadata = validateCredentialMetadata(data.metadata);
+      return { key: data.key, name: data.name, createdAt: data.createdAt, ...(credentialMetadata ? { metadata: credentialMetadata } : {}) };
     } catch (error) {
       if (error instanceof CredentialStoreError) throw error;
       fail("The credential file could not be read. Run the MetaSo connection setup again.", "INVALID_CREDENTIAL");
@@ -284,14 +286,16 @@ export class CredentialStore {
     const credential = this.read();
     return {
       configured: Boolean(credential),
-      ...(credential ? { name: credential.name } : {}),
+      ...(credential ? { name: credential.name, ...(credential.metadata ? { metadata: credential.metadata } : {}) } : {}),
       path: this.path,
       storage: "file",
       encrypted: false,
     };
   }
 
-  write({ key, name, replace = false } = {}) {
+  write({ key, name, metadata, replace = false } = {}) {
+    try { metadata = validateCredentialMetadata(metadata); }
+    catch { fail("Invalid credential metadata.", "INVALID_CREDENTIAL"); }
     if (!isLikelyMetaSoApiKey(key) || !validName(name) || typeof replace !== "boolean") {
       fail("A valid MetaSo API Key and a name of 1–20 characters without control characters or API Keys are required.", "INVALID_CREDENTIAL");
     }
@@ -317,7 +321,7 @@ export class CredentialStore {
       if (this.platform === "win32") this.applyWindowsAcl(temporary, false);
       this.assertPrivate(temporary, fstatSync(descriptor), false, false);
       const createdAt = new Date().toISOString();
-      writeFileSync(descriptor, `${JSON.stringify({ version: 1, key, name: name.trim(), createdAt })}\n`, "utf8");
+      writeFileSync(descriptor, `${JSON.stringify({ version: 1, key, name: name.trim(), createdAt, ...(metadata ? { metadata } : {}) })}\n`, "utf8");
       fsyncSync(descriptor);
       closeSync(descriptor);
       descriptor = undefined;
@@ -334,7 +338,7 @@ export class CredentialStore {
         const directoryDescriptor = openSync(this.directory, constants.O_RDONLY);
         try { fsyncSync(directoryDescriptor); } finally { closeSync(directoryDescriptor); }
       }
-      return { configured: true, name: name.trim(), createdAt, path: this.path, storage: "file", encrypted: false };
+      return { configured: true, name: name.trim(), createdAt, ...(metadata ? { metadata } : {}), path: this.path, storage: "file", encrypted: false };
     } catch (error) {
       if (error instanceof CredentialStoreError) throw error;
       if (error.code === "EEXIST") fail("A MetaSo credential already exists. Explicit replacement is required.", "CREDENTIAL_EXISTS");

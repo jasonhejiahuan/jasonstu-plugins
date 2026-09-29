@@ -34,7 +34,7 @@ const TOOLS = [
   },
   {
     name: "metaso_auth_status",
-    description: "Read local MetaSo connection progress and credential metadata. Never returns Key values and makes no billable API call. configured means locally stored, not an online validity check.",
+    description: "Read local MetaSo connection progress and credential metadata, including captured account username, masked phone, email and account type when available. Account total and daily quotas are shared across its API Keys; independent per-Key limits are not supported. Never returns Key values and makes no billable API call. configured means locally stored, not an online validity check.",
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },

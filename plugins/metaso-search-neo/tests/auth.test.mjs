@@ -90,3 +90,17 @@ test("stale locks are left for inspection instead of racing another recovery", t
   writeFileSync(join(lock, "owner.json"), JSON.stringify({ pid: 2147483647, token: "old" }));
   assert.throws(() => auth.start({ name: "Stale" }), { code: "AUTH_STALE_LOCK" });
 });
+
+test("connection persists optional account metadata and failed enrichment still saves the Key", async t => {
+  const metadata = { accountProfileStatus: "unavailable", quotaScope: "account" };
+  const { auth, store } = fixture(t, { collectProfile: async () => { throw new Error("page unavailable"); } });
+  auth.start({ name: "Optional profile" });
+  await auth.pending;
+  assert.equal(auth.status().state, "complete");
+  assert.deepEqual(store.read().metadata, metadata);
+  const full = { account: { username: "Example", source: "https://metaso.cn/meta-user-info", capturedAt: new Date().toISOString() }, accountProfileStatus: "partial", quotaScope: "account" };
+  const second = fixture(t, { collectProfile: async () => full });
+  second.auth.start({ name: "With profile" });
+  await second.auth.pending;
+  assert.deepEqual(second.auth.status().credential.metadata, full);
+});

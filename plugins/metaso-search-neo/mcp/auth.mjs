@@ -1,3 +1,4 @@
+import { collectAccountMetadata } from "./account-profile.mjs";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
@@ -62,7 +63,7 @@ function npmCommand(environment) {
   throw failure("NPM_UNAVAILABLE", "npm was not found. Install Node.js with npm or use manual import.");
 }
 
-export async function prepareBrowserRuntime({ store, environment = process.env, signal, onState }) {
+export async function prepareBrowserRuntime({ store, environment = process.env, signal, onState, headless = false }) {
   const root = join(store.ensureDirectory(), "browser-runtime", PLAYWRIGHT_VERSION);
   const entry = join(root, "node_modules", "playwright", "index.mjs");
   const validate = async () => {
@@ -83,7 +84,7 @@ export async function prepareBrowserRuntime({ store, environment = process.env, 
     await validate();
   }
   const { chromium } = await import(pathToFileURL(realpathSync(entry)).href);
-  const launchOptions = { headless: false, env: childEnvironment(environment) };
+  const launchOptions = { headless, env: childEnvironment(environment) };
   for (const channel of process.platform === "win32" ? ["msedge", "chrome"] : ["chrome", "msedge"]) {
     if (signal.aborted) throw failure("CANCELLED", "Connection cancelled.");
     try { return await chromium.launch({ ...launchOptions, channel }); } catch { /* Try another supported browser. */ }
@@ -101,6 +102,7 @@ export class AuthManager {
     this.store = options.store ?? new CredentialStore({ environment: this.environment });
     this.prepare = options.prepare ?? prepareBrowserRuntime;
     this.provision = options.provision ?? provisionApiKey;
+    this.collectProfile = options.collectProfile ?? collectAccountMetadata;
     this.session = { state: "idle" };
     this.browser = null;
     this.pending = null;
@@ -178,11 +180,17 @@ export class AuthManager {
       if (signal.aborted) throw failure("CANCELLED", "Connection cancelled.");
       const context = await this.browser.newContext({ acceptDownloads: false });
       const page = await context.newPage();
-      // No persistent profile, storageState, tracing, video, HAR, screenshots or console forwarding.
+      // No persistent profile or saved storageState, tracing, video, HAR, screenshots or console forwarding.
       const credential = await this.provision(page, { ...options, onState, signal });
       if (signal.aborted) throw failure("CANCELLED", "Connection cancelled.");
+      onState("reading_account_profile");
+      let metadata = { accountProfileStatus: "unavailable", quotaScope: "account" };
+      try {
+        metadata = await this.collectProfile({ context, signal, prepare: () => this.prepare({ store: this.store, environment: this.environment, signal, onState: () => {}, headless: true }) });
+      } catch { /* Profile enrichment must not discard a successfully obtained Key. */ }
+      if (signal.aborted) throw failure("CANCELLED", "Connection cancelled.");
       onState("saving");
-      this.store.write({ ...credential, replace: options.replace });
+      this.store.write({ ...credential, metadata, replace: options.replace });
       this.session = { ...this.session, state: "complete", message: "MetaSo Key saved locally. The MCP will load it on the next call.", completedAt: new Date().toISOString() };
     } catch (error) {
       // Never propagate a browser call log, page HTML, or credential through MCP.

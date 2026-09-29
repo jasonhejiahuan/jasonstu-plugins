@@ -6,6 +6,8 @@ Distributed in the [JASON Studio Plugins marketplace](https://github.com/jasonhe
 
 First-time setup: see [QUICKSTART.md](QUICKSTART.md) for API Key configuration and verification.
 
+Version 0.3.1 optionally captures account display metadata after browser connection using a separate headless browser. `metaso_auth_status` returns the captured username, displayed phone, email and account type. Total and daily Token quotas are shared across all Keys of the same account; per-Key limits are not supported. See [account metadata](docs/auth.md#account-metadata-031).
+
 ## Capabilities
 
 - Six-scope structured search: webpage, document, scholar, image, video, and podcast.

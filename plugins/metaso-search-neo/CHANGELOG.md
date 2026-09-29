@@ -1,3 +1,12 @@
+# Changelog
+
+## 0.3.1 — 2026-09-29
+
+- After browser connection, read the MetaSo account page in a separate headless browser and save the displayed username, masked phone, email, and account type with the local credential.
+- Expose the account metadata and its availability through `metaso_auth_status` and CLI status without returning the API Key or browser session. Preserve existing credentials and allow Key setup to succeed when the account page cannot be read.
+- Clarify that total and daily Token quotas are shared by an account's API Keys; per-Key limits are unavailable. Keep display fields separate from stable account identity.
+- Verify a real macOS connection with full account metadata capture and a successful search using the new Key.
+
 ## 2026-09-16 Marketplace repository rename
 
 - Rename the GitHub repository to `jasonstu-plugins` and align the plugin's published links and installation instructions with the `JASON Studio Plugins` marketplace.

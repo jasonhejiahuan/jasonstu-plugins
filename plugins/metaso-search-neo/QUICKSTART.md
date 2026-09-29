@@ -83,3 +83,11 @@ Linux 和更多说明见 [手动导入](docs/auth.md#manual-import)。完成后�
 插件市场里的 `ON_INSTALL` 不会自动运行这个本地连接程序；请主动调用 MetaSo Auth。也不要依赖 `[shell_environment_policy.set]` 向插件内置 MCP 传递 Key。
 
 自动创建使用 MetaSo 网站内部接口，网站更新后可能需要同步调整；它不是 MetaSo 官方 OAuth 或稳定的公开 Key 管理 API。依据与具体请求见 [认证说明](docs/auth.md#website-request-contract-and-evidence)。
+
+## 账户资料（0.3.1）
+
+浏览器连接创建或导入 Key 后，插件会尝试在 headless 浏览器中访问账户资料页，读取用户名、页面显示的手机号（保留掩码）、电子邮箱和账号类型。登录会话仅在内存中转交，不保存浏览器会话文件。资料获取失败不影响 Key 保存。
+
+调用 `metaso_auth_status`（或终端 `node scripts/auth.mjs --status`）可读取 `credential.metadata.account`；`accountProfileStatus` 为 `available`、`partial` 或 `unavailable`。旧凭据没有 metadata，需要下一次浏览器连接/导入时获取；不会自动为旧 Key 生成个人资料。该操作读取缓存资料，不自动刷新网页。
+
+`quotaScope: "account"` 表示同一用户的总 Token 额度和每日 Token 额度在所有 API Key 之间共享，不支持单独设置 API Key 限额。用户名、邮箱和掩码手机号仅用于显示和选择，不能作为可靠的唯一账户 ID；插件不会据此自动合并账户。当前仍只保存一个活动 Key。

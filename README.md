@@ -17,6 +17,8 @@ Requires Node.js 20 or later. Version 0.3.0 adds optional browser setup: ask Cod
 
 Browser setup requires npm and a desktop session. On first use it installs pinned Playwright support and, if Chrome/Edge cannot be launched, downloads Chromium. It is an explicit local setup workflow; the marketplace's `ON_INSTALL` policy does not launch it automatically. Live login, direct website-API Key creation, private-file storage and a subsequent search were verified on macOS. Do not put API keys in repository files, marketplace metadata, or chat.
 
+Version 0.3.1 also records the account's displayed username, masked phone, email, and plan after browser setup when the account page is available. Read them with `metaso_auth_status`. Account total and daily Token quotas are shared across its API Keys; see the [changelog](plugins/metaso-search-neo/CHANGELOG.md) and [account metadata details](plugins/metaso-search-neo/docs/auth.md#account-metadata-031).
+
 To update an installed marketplace and plugin after a release:
 
 ```bash
