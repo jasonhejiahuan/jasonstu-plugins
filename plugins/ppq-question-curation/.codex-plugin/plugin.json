@@ -1,0 +1,38 @@
+{
+  "name": "ppq-question-curation",
+  "version": "1.0.0",
+  "description": "Source-verified past-paper curation, recurrence-ranked study tables, and lossless PPQ question-bank preparation.",
+  "author": {
+    "name": "JASON Studio"
+  },
+  "homepage": "https://github.com/jasonhejiahuan/jasonstu-plugins/tree/main/plugins/ppq-question-curation",
+  "repository": "https://github.com/jasonhejiahuan/jasonstu-plugins",
+  "license": "MIT",
+  "keywords": [
+    "ppq",
+    "past-papers",
+    "mark-schemes",
+    "question-bank",
+    "metadata",
+    "education"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "PPQ Practice Lab Question Curation",
+    "shortDescription": "Collect, verify and organise exam questions.",
+    "longDescription": "A complete, resumable workflow for collecting matching question papers and mark schemes, reviewing original pages, preserving examiner wording and metadata, measuring recurrence, and exporting study tables or PPQ banks. Includes PDF validation, evidence checks and recursive metadata comparison. No account or MCP server is required; MetaSo search is optional.",
+    "developerName": "JASON Studio",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/jasonhejiahuan/jasonstu-plugins/tree/main/plugins/ppq-question-curation",
+    "defaultPrompt": [
+      "用 $exam-question-curation 整理指定年份与科目的历年真题，核验同卷评分标准，并按实际出现频率生成学习表。",
+      "用 $exam-question-curation 将已核验题目扩展为 PPQ 题库，保留全部 metadata、历史修订和原图。"
+    ],
+    "composerIcon": "./assets/ppq-logo.svg",
+    "logo": "./assets/ppq-logo.svg"
+  }
+}

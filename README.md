@@ -1,6 +1,11 @@
 # JASON Studio Plugins
 
-This repository is a Codex plugin marketplace maintained by JASON Studio. It contains [MetaSo Search Neo](plugins/metaso-search-neo/README.md), a local MCP server and six focused skills for account setup, search, webpage reading, cited answers, deep research, and topic knowledge bases.
+This repository is a Codex plugin marketplace maintained by JASON Studio.
+
+| Plugin | Purpose |
+| --- | --- |
+| [MetaSo Search Neo](plugins/metaso-search-neo/README.md) | Search, webpage reading, cited answers, deep research and topic knowledge bases with a local MCP server. |
+| [PPQ Practice Lab Question Curation](plugins/ppq-question-curation/README.md) | Collect and verify past-paper questions, rank study tables and prepare PPQ banks without losing metadata. A portable skill with local validation tools and the PPQ Practice Lab logo. |
 
 ## Install from GitHub
 
@@ -9,9 +14,12 @@ Use Codex CLI to add this repository as a marketplace, then install the plugin:
 ```bash
 codex plugin marketplace add jasonhejiahuan/jasonstu-plugins
 codex plugin add metaso-search-neo@jasonstu-plugins
+codex plugin add ppq-question-curation@jasonstu-plugins
 ```
 
-The marketplace catalog is [`.agents/plugins/marketplace.json`](.agents/plugins/marketplace.json). The plugin package is under [`plugins/metaso-search-neo/`](plugins/metaso-search-neo/). The marketplace source path is relative to the repository root, so a GitHub clone or marketplace refresh loads the same package.
+Install either or both plugins. The marketplace catalog is [`.agents/plugins/marketplace.json`](.agents/plugins/marketplace.json), and package paths are relative to the repository root. PPQ Practice Lab Question Curation needs no account or MCP service; its optional PDF helpers use Python 3.10+. Its [standalone Skill and plugin ZIPs](https://github.com/jasonhejiahuan/jasonstu-plugins/releases) can also be shared independently.
+
+## MetaSo setup
 
 Requires Node.js 20 or later. Version 0.3.0 adds optional browser setup: ask Codex to connect MetaSo, complete login in the browser, and the local helper calls MetaSo's website requests to create or import the exact named API Key. It does not automate form controls or read the Key from page elements. Credentials are stored in a private, persistent file outside the plugin bundle. This file is plaintext with current-user permissions, not an encrypted vault. Environment-variable configuration and the legacy macOS Keychain fallback remain available. See the [quick start](plugins/metaso-search-neo/QUICKSTART.md) and [authentication details](plugins/metaso-search-neo/docs/auth.md).
 
@@ -24,6 +32,7 @@ To update an installed marketplace and plugin after a release:
 ```bash
 codex plugin marketplace upgrade jasonstu-plugins
 codex plugin add metaso-search-neo@jasonstu-plugins
+codex plugin add ppq-question-curation@jasonstu-plugins
 ```
 
 Restart Codex and start a new task to load newly installed skills and MCP tools.
@@ -40,3 +49,5 @@ npm run smoke
 ```
 
 See the plugin [README](plugins/metaso-search-neo/README.md) for its features, authentication, and Research Frontier behavior. This repository's code is MIT licensed; MetaSo's names and artwork remain the property of their respective owner.
+
+PPQ's helper tests and package validation are documented in its [README](plugins/ppq-question-curation/README.md#验证与打包). PPQ branding belongs to JASON Studio.
