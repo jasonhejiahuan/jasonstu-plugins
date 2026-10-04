@@ -41,7 +41,7 @@ def main():
     if output.is_relative_to(ROOT) and output != ROOT/'dist':
         raise ValueError('Use the plugin dist directory or an output directory outside the package')
     output.mkdir(parents=True, exist_ok=True)
-    version = json.loads((ROOT/'.codex-plugin/plugin.json').read_text())['version']
+    version = json.loads((ROOT/'.codex-plugin/plugin.json').read_text(encoding='utf-8'))['version']
     paths = []
     for root, name in ((ROOT, 'ppq-question-curation'), (SKILL, 'exam-question-curation')):
         target = output/f'{name}-{version}.zip'
