@@ -22,3 +22,6 @@ credential.json
 .browser-auth-lock/
 browser-runtime/
 .playwright-cli/
+__pycache__/
+*.py[cod]
+plugins/ppq-question-curation/dist/

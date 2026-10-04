@@ -15,6 +15,17 @@
         "authentication": "ON_INSTALL"
       },
       "category": "Productivity"
+    },
+    {
+      "name": "ppq-question-curation",
+      "source": {
+        "source": "local",
+        "path": "./plugins/ppq-question-curation"
+      },
+      "policy": {
+        "installation": "AVAILABLE"
+      },
+      "category": "Productivity"
     }
   ]
 }

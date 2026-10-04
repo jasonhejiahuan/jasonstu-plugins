@@ -1,0 +1,36 @@
+{
+  "checkedAt": "2026-10-04",
+  "commit": "8a0fc2d10f128255dd65b3590dd4582e61b00c15",
+  "files": [
+    {
+      "source": "web/src/lib/types.ts",
+      "snapshot": "ppq-types.ts",
+      "sha256": "1d718ef4f84c83af38ba17086747f2b00f2b4ccff5504125f7f121965af6b1cc"
+    },
+    {
+      "source": "web/src/lib/cloud-types.ts",
+      "snapshot": "cloud-types.ts",
+      "sha256": "bfb83b969c8efef60b28542c614ed302a7a8aac1078e7977cb34efbf782b3aad"
+    },
+    {
+      "source": "web/migrations/0001_multiuser.sql",
+      "snapshot": "d1-schema.sql",
+      "sha256": "fc9ab118ca254c3d07cf9f6a687748671e6625fda5daca6aa0a9df4b2be0a624"
+    },
+    {
+      "source": "web/migrations/0002_progress_hash.sql",
+      "snapshot": "d1-schema.sql",
+      "sha256": "c85278d0b693a42a8b5a593bf2489960ff3236f520fb697a32f00117dcaddd9e"
+    },
+    {
+      "source": "web/migrations/0003_question_lookup.sql",
+      "snapshot": "d1-schema.sql",
+      "sha256": "28782ea46eef9939806712e2e231c85f4790ef93feb25d2368a12492fa6212ee"
+    },
+    {
+      "source": "web/migrations/0004_administration.sql",
+      "snapshot": "d1-schema.sql",
+      "sha256": "f965c4e316bb5b9f491604435ca5ac7297615c77362d7e706fbcfc3701a58449"
+    }
+  ]
+}
