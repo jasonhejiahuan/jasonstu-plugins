@@ -1,4 +1,5 @@
 """Signing keeps source resources intact and verifies the publisher's actual signature."""
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -74,8 +75,10 @@ class SigningTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             source, output = Path(directory)/'original.ppqbank.jstu', Path(directory)/'signed.ppqbank.jstu'
             suffix = '\r\n  {"type":"source","id":"example","future":[null,false]}\r\n'
-            raw = '\ufeff' + json.dumps(fixture(), ensure_ascii=False) + suffix
             attachment = b'%PDF-1.4\noriginal attachment bytes\n'
+            asset = {'type':'asset','id':'original','path':'assets/source.pdf','mediaType':'application/pdf','sha256':hashlib.sha256(attachment).hexdigest()}
+            suffix += json.dumps(asset) + '\r\n'
+            raw = '\ufeff' + json.dumps(fixture(), ensure_ascii=False) + suffix
             with ZipFile(source, 'w') as archive:
                 archive.writestr('bank.jsonl', raw)
                 archive.writestr('assets/source.pdf', attachment)

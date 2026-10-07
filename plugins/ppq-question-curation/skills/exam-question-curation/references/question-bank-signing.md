@@ -3,13 +3,16 @@
 After validating a newly prepared PPQ package and its [creator/model provenance](ppq.md#bank-provenance), request the canonical publisher signature with the bundled helper. Normal curation stays usable without account access; signing needs an approving account with **Publish canonical question banks** permission. Use the user's target platform origin, defaulting to the configured beta below. The helper only sends bank ID, title, content hash and declared creator to the service; it does not upload question text, assets, answers or account cookies.
 
 ```sh
-python3 SKILL_DIR/scripts/check_bank_provenance.py questions.ppqbank.jstu
-python3 SKILL_DIR/scripts/sign_question_bank.py questions.ppqbank.jstu
+python3 SKILL_DIR/scripts/normalize_asset_names.py questions.ppqbank.jstu --output questions-named.ppqbank.jstu
+python3 SKILL_DIR/scripts/check_bank_provenance.py questions-named.ppqbank.jstu
+python3 SKILL_DIR/scripts/sign_question_bank.py questions-named.ppqbank.jstu
 ```
+
+Every packaged attachment must first follow [readable naming](asset-naming.md). The signer rejects opaque names and unregistered ZIP files before contacting the service. If renaming an already signed package, explicitly invalidate and archive the old signature with the normalizer, then request a new signature.
 
 Python 3.10+ and Node.js 22+ are required for signing; there are no npm packages. Node performs the exact JavaScript number serialization used by PPQ. Python handles portable archive files and the approval flow. Do not replace the canonical digest with Python's ordinary `json.dumps`: exponent and number formatting can differ.
 
-The command opens an account approval page once, using the existing browser session. The user signs in if needed and approves the identified question bank. The command polls at a bounded interval and writes `questions-signed.ppqbank.jstu` only after the returned signature matches the request and verifies against the platform public key. It never asks for credentials, reads browser cookies or stores a private signing key. Unknown models remain `null`. Permission failure, rejection or expiration leaves the original file unchanged; report the unsigned result and pending signing status without claiming Canonical.
+The command opens an account approval page once, using the existing browser session. The user signs in if needed and approves the identified question bank. The command polls at a bounded interval and writes `questions-named-signed.ppqbank.jstu` only after the returned signature matches the request and verifies against the platform public key. It never asks for credentials, reads browser cookies or stores a private signing key. Unknown models remain `null`. Permission failure, rejection or expiration leaves the original file unchanged; report the unsigned result and pending signing status without claiming Canonical.
 
 Options: `--base-url https://ppq.beta.jasonstu.cc`, `--output new-file.ppqbank.jstu`, `--no-browser` (show the approval link without opening it), and `--timeout 600`. A `.jsonl` input is also supported. Output must be a new path. HTTPS is required except for a loopback development origin. Approvals must stay on the supplied platform origin; redirects are rejected. The polling token stays in memory and must not be printed, logged, placed in a browser URL or committed.
 
