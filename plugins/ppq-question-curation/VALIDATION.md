@@ -1,3 +1,19 @@
+# Release validation: 1.2.1
+
+Checked 2026-10-07 against the PPQ working tree. Publication and live deployment are separate release operations.
+
+- 23 portable Python tests pass, including creator/model requirements, original-file preservation, opaque approval polling, public-key signature verification, rejection of forged/unknown signatures, cross-origin approval rejection and archive attachment preservation. Signing tests use temporary keys and synthetic local resources; no private platform key or live account is required.
+- A real local Worker/D1 smoke passed the actual CLI request, authenticated fixture preview/approval, token polling, signature verification and separate output creation. The PPQ importer and pinned key verifier accepted the archive, and an export/reimport remained Canonical with unchanged attachment bytes. This exposed and fixed the CLI Origin header required by the service. The fixture used an isolated local identity and never touched a real account or remote database.
+- The shared canonical fixture matches the platform hash for BOM/CRLF, legacy marking aliases, extension keys, JavaScript number formatting, Unicode and array ordering. The platform's 12 signature tests pass with the same fixture.
+- Plugin metadata/reference validation and skill validation pass. Signing requires Python 3.10+ and Node.js 22+; CI now supplies Node 24 explicitly on every operating system.
+- PPQ metadata/importer checks passed 51 tests. The imported teacher collection suite passed 15 tests covering all 12 delivered JSONL files, canonical import/export, every registered attachment hash and a complete essay-package round trip with preserved historical revisions.
+- A separate read-only comparison against the teacher's 12 original archives found all 10,120 non-header original records unchanged and all 1,077 registered attachment occurrences byte-identical. These checks establish data preservation and importer compatibility, not source accuracy.
+- New portable question examples include illustrative provenance. Current question modes, canonical `mark_scheme` compatibility, provenance and essay contracts are bundled; cloud/database snapshots keep their explicitly recorded earlier baseline.
+
+No plugin publication, production permission grant, source review or live account approval is implied by these local checks. The installation result and release artifacts should be recorded by the publishing task.
+
+## Earlier release evidence
+
 # Release validation: 1.0.0
 
 Checked 2026-10-04. Application integration baseline: PPQ main `8a0fc2d10f128255dd65b3590dd4582e61b00c15`.
