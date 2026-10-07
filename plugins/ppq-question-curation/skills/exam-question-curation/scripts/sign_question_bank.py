@@ -18,6 +18,7 @@ import webbrowser
 from zipfile import BadZipFile, ZipFile
 
 from check_bank_provenance import validate
+from normalize_asset_names import validate_asset_names
 
 HELPER = Path(__file__).with_name('question_bank_signing.mjs')
 MAX_MANIFEST_BYTES = 25 * 1024 * 1024
@@ -77,8 +78,12 @@ def read_manifest(source):
     if not records:
         raise ValueError('The question bank is empty')
     validate(records[0])
+    validate_asset_names(records)
     if source.name.lower().endswith('.ppqbank.jstu'):
         with ZipFile(source) as archive:
+            registered = {'bank.jsonl', *(record['path'] for record in records if record.get('type') == 'asset')}
+            if any(not info.is_dir() and info.filename not in registered for info in archive.infolist()):
+                raise ValueError('Register all archive attachments and normalize their names before signing')
             for record in records:
                 if record.get('type') == 'asset':
                     content = archive.read(record['path'])

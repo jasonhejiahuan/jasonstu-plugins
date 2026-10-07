@@ -32,7 +32,7 @@ codex plugin add ppq-question-curation@jasonstu-plugins
 2. 按源文件哈希缓存带页码的文本，生成候选队列。
 3. 核验同 variant 的 QP/MS 原页、子题号、原始分值、加粗/下划线及 Accept / Do not accept。
 4. 保留每次出现的原题和评分依据，按真实已核验出现次数归总学习主题。
-5. 导出有来源链接的 Markdown 学习表；需要时生成 `.ppqbank.jstu`，用实际 PPQ 导入器验证。
+5. 导出有来源链接的 Markdown 学习表；需要时生成 `.ppqbank.jstu`，附件沿用原始试卷可读文件名，图片使用来源、用途及页码，用实际 PPQ 导入器验证。
 
 PPQ 适配包含当前题库格式、IndexedDB、云同步 v2 和 D1 表/键的参考快照。每次任务仍须核对目标项目的最新代码。未知 root/nested metadata、`sourceDetails`、mark_scheme/modes 扩展、原始导入字节、附件和已发布修订均需保留；学习表不是完整数据库的替代品。
 
@@ -68,7 +68,10 @@ python scripts/package_plugin.py --out dist
 打包时写明原作者、已声明的模型（未知为 `null`）与打包者。签名记录实际批准发布的 PPQ 用户名，并保留第三方来源与未验证状态。需要 Python 3.10+ 和 Node.js 22+，不需要额外 npm 依赖或本地私钥：
 
 ```sh
-python skills/exam-question-curation/scripts/sign_question_bank.py questions.ppqbank.jstu
+python skills/exam-question-curation/scripts/normalize_asset_names.py questions.ppqbank.jstu --output questions-named.ppqbank.jstu
+python skills/exam-question-curation/scripts/sign_question_bank.py questions-named.ppqbank.jstu
 ```
 
-浏览器打开平台确认页；批准后生成独立的 `questions-signed.ppqbank.jstu`。原文件保持不变。详细契约见 [签名说明](skills/exam-question-curation/references/question-bank-signing.md)。
+浏览器打开平台确认页；批准后生成独立的 `questions-named-signed.ppqbank.jstu`。原文件保持不变。详细契约见 [签名说明](skills/exam-question-curation/references/question-bank-signing.md)。
+
+所有新打包附件必须遵循[可读命名规范](skills/exam-question-curation/references/asset-naming.md)：优先保留 `9702_s25_qp_21.pdf` 等官方原名，图片按来源、用途和页码命名，仅重名时追加短哈希。重命名同时更新 JSONL 路径与 ZIP 文件名，保留原字节、ID 和历史；必须在签名前完成。

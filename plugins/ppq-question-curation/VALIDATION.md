@@ -1,3 +1,16 @@
+# Release validation: 1.3.0
+
+Checked 2026-10-07. Attachment naming follows the earliest PPQ official-basename convention; account signing retains the 1.2.1 protocol.
+
+- 33 portable Python tests pass. The ten new naming cases cover official Cambridge combined-paper names, existing Edexcel filenames, opaque aliases, source/page image names, repeated image occurrences, same/different-byte and case-insensitive collisions, readable-name priority, idempotency, explicit signature invalidation, unknown metadata, unchanged original files and signing rejection before network activity.
+- A complete archive round trip on all 12 supplied teacher packages preserved every one of the 1,077 attachment occurrences byte-for-byte, retained IDs and digests, and kept every source/question JSONL line exactly unchanged. All renamed outputs passed the new filename validator; the original package hashes remained unchanged. Temporary outputs were removed after checking.
+- Synthetic archive tests retain BOM, CRLF and literal Unicode line/paragraph separators. Missing, modified or unregistered attachments fail without output. Existing signatures survive unchanged packages; a changed path requires explicit invalidation and keeps the old signature in audit metadata before a new signature is requested.
+- Plugin metadata/reference and standalone skill validation pass. Generated plugin and skill packages include the dependency-free normalizer and its tests. New-package naming does not change compatibility of historical platform imports.
+
+These checks establish naming and data preservation, not the accuracy of the teacher's source transcriptions. The prior real Worker/D1 signing evidence is retained below; this release does not change its request/approval protocol.
+
+## Earlier release evidence
+
 # Release validation: 1.2.1
 
 Checked 2026-10-07 against the PPQ working tree. Publication and live deployment are separate release operations.
@@ -11,8 +24,6 @@ Checked 2026-10-07 against the PPQ working tree. Publication and live deployment
 - New portable question examples include illustrative provenance. Current question modes, canonical `mark_scheme` compatibility, provenance and essay contracts are bundled; cloud/database snapshots keep their explicitly recorded earlier baseline.
 
 No plugin publication, production permission grant, source review or live account approval is implied by these local checks. The installation result and release artifacts should be recorded by the publishing task.
-
-## Earlier release evidence
 
 # Release validation: 1.0.0
 
