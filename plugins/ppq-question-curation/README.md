@@ -4,7 +4,7 @@
 
 JASON Studio 的全流程题目归总插件：收集历年原卷与同变体评分标准，核验题干和评分关键词，统计真实出现频率，导出学习表或 PPQ 题库。
 
-沿用 PPQ Practice Lab 的原版 Logo。插件包含一个可单独分享的 `exam-question-curation` Skill，没有常驻服务或账号要求。MetaSo 可选；也可以使用本地已有试卷和其他可用检索工具。
+沿用 PPQ Practice Lab 的原版 Logo。插件包含一个可单独分享的 `exam-question-curation` Skill，没有常驻服务；普通资料整理不需要账号。MetaSo 可选；也可以使用本地已有试卷和其他可用检索工具。
 
 ## 安装
 
@@ -34,13 +34,13 @@ codex plugin add ppq-question-curation@jasonstu-plugins
 4. 保留每次出现的原题和评分依据，按真实已核验出现次数归总学习主题。
 5. 导出有来源链接的 Markdown 学习表；需要时生成 `.ppqbank.jstu`，用实际 PPQ 导入器验证。
 
-PPQ 适配包含当前题库格式、IndexedDB、云同步 v2 和 D1 表/键的参考快照。每次任务仍须核对目标项目的最新代码。未知 root/nested metadata、`sourceDetails`、rubric/modes 扩展、原始导入字节、附件和已发布修订均需保留；学习表不是完整数据库的替代品。
+PPQ 适配包含当前题库格式、IndexedDB、云同步 v2 和 D1 表/键的参考快照。每次任务仍须核对目标项目的最新代码。未知 root/nested metadata、`sourceDetails`、mark_scheme/modes 扩展、原始导入字节、附件和已发布修订均需保留；学习表不是完整数据库的替代品。
 
-候选题、已核验题、已收齐文件和完成全部审阅分别计数。工具可以验证文件与证据记录，不能代替原页核验，也不会自动发布题库或修改用户进度。
+候选题、已核验题、已收齐文件和完成全部审阅分别计数。工具可以验证文件与证据记录，不能代替原页核验，不会修改用户进度。完整题库打包后会请求平台签名，由已有 PPQ 账号确认一次；签名不上传题库正文或将其自动加入公开目录。
 
 ## 分享与依赖
 
-[Releases](https://github.com/jasonhejiahuan/jasonstu-plugins/releases) 提供插件 ZIP 和独立 Skill ZIP。独立版解压后，将整个 `exam-question-curation` 文件夹放入 `~/.codex/skills/`（或对应工具的 skills 目录）。无需复制这个私有 PPQ 项目，也无需登录 PPQ。
+[Releases](https://github.com/jasonhejiahuan/jasonstu-plugins/releases) 提供插件 ZIP 和独立 Skill ZIP。独立版解压后，将整个 `exam-question-curation` 文件夹放入 `~/.codex/skills/`（或对应工具的 skills 目录）。无需复制这个私有 PPQ 项目，普通资料整理无需登录 PPQ；Canonical 签名需要有 Publish canonical question banks 权限的 PPQ 账号。
 
 Skill 指令本身无运行依赖。PDF 工具需 Python 3.10+，并在可用的隔离环境安装：
 
@@ -62,3 +62,13 @@ python scripts/package_plugin.py --out dist
 测试使用临时合成 PDF，检查错误页、缺失 MS、过期证据、重复频次、未核验题隔离和 metadata 无损。仓库 CI 在 Linux、macOS 和 Windows 上运行。PPQ 项目实际导入/导出与云传输检查见 [验证记录](VALIDATION.md)。
 
 本插件通过 GitHub Marketplace 分发；这不等同于上架 Codex 通用公开插件目录。代码和文档沿用仓库 MIT 许可；PPQ Logo 是 JASON Studio 的品牌标识。
+
+## Canonical 题库签名
+
+打包时写明原作者、已声明的模型（未知为 `null`）与打包者。签名记录实际批准发布的 PPQ 用户名，并保留第三方来源与未验证状态。需要 Python 3.10+ 和 Node.js 22+，不需要额外 npm 依赖或本地私钥：
+
+```sh
+python skills/exam-question-curation/scripts/sign_question_bank.py questions.ppqbank.jstu
+```
+
+浏览器打开平台确认页；批准后生成独立的 `questions-signed.ppqbank.jstu`。原文件保持不变。详细契约见 [签名说明](skills/exam-question-curation/references/question-bank-signing.md)。

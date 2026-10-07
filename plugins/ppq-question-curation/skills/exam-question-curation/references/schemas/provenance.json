@@ -5,7 +5,10 @@
     {
       "source": "web/src/lib/types.ts",
       "snapshot": "ppq-types.ts",
-      "sha256": "1d718ef4f84c83af38ba17086747f2b00f2b4ccff5504125f7f121965af6b1cc"
+      "sha256": "e502bebfd72519fd92cc11b023ba27b6c6e2d4fb41c9c4b86e51539d584dae9a",
+      "checkedAt": "2026-10-07",
+      "sourceState": "working-tree",
+      "baseCommit": "2b212173e201bf3af0ecfb28f109ddb1bbc459e4"
     },
     {
       "source": "web/src/lib/cloud-types.ts",

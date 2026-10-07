@@ -9,7 +9,7 @@ from validate_plugin import ROOT, SKILL, validate
 
 
 def files(root):
-    allowed = {'.md', '.py', '.txt', '.json', '.jsonl', '.yaml', '.ts', '.sql', '.svg'}
+    allowed = {'.md', '.py', '.mjs', '.txt', '.json', '.jsonl', '.yaml', '.ts', '.sql', '.svg'}
     for path in sorted(root.rglob('*')):
         relative = path.relative_to(root)
         if '__pycache__' in relative.parts or 'dist' in relative.parts or path.suffix == '.pyc':

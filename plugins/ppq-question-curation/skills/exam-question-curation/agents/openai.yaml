@@ -2,5 +2,5 @@ interface:
   icon_small: "./assets/ppq-logo.svg"
   icon_large: "./assets/ppq-logo.svg"
   display_name: "PPQ Practice Lab Question Curation"
-  short_description: "Source-verified papers, answers and question banks"
-  default_prompt: "Use $exam-question-curation to collect past papers, verify their mark schemes, rank recurring questions and prepare the requested study table or PPQ bank."
+  short_description: "Source-backed curation and signed question banks"
+  default_prompt: "Use $exam-question-curation to collect past papers, verify their mark schemes, rank recurring questions and prepare the requested study table or PPQ question bank with creator/model provenance and account-approved signing."

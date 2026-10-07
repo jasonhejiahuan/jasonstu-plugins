@@ -1,7 +1,7 @@
 {
   "name": "ppq-question-curation",
-  "version": "1.0.0",
-  "description": "Source-verified past-paper curation, recurrence-ranked study tables, and lossless PPQ question-bank preparation.",
+  "version": "1.2.1",
+  "description": "Source-backed question curation, provenance-aware PPQ packaging, and account-approved canonical question bank signatures.",
   "author": {
     "name": "JASON Studio"
   },
@@ -20,7 +20,7 @@
   "interface": {
     "displayName": "PPQ Practice Lab Question Curation",
     "shortDescription": "Collect, verify and organise exam questions.",
-    "longDescription": "A complete, resumable workflow for collecting matching question papers and mark schemes, reviewing original pages, preserving examiner wording and metadata, measuring recurrence, and exporting study tables or PPQ banks. Includes PDF validation, evidence checks and recursive metadata comparison. No account or MCP server is required; MetaSo search is optional.",
+    "longDescription": "Collect matching question papers and mark schemes, preserve original wording and metadata, prepare PPQ question banks including teacher essay puzzles, and request a canonical publisher signature through the existing PPQ account. Includes PDF evidence checks, provenance validation and lossless round-trip checks. MetaSo is optional; ordinary curation does not need a PPQ account.",
     "developerName": "JASON Studio",
     "category": "Productivity",
     "capabilities": [
